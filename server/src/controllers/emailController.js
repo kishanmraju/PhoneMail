@@ -23,14 +23,13 @@ const sendEmail = async (req, res) => {
       });
     }
 
-    //! This syntax from gpt ask 
+    // Remove duplicate recipients
     const uniqueRecipients = [...new Set(recipients)];
 
+    // Check that all recipients are PhoneMail users
     const users = await User.find(
       {
         phoneNumber: {
-          //!! for scalability, you can add all phonenumbers into an array, and try to return their profile. this is just a prototype, so we are doing this
-          // TODO :
           $in: uniqueRecipients
         }
       },
@@ -39,11 +38,9 @@ const sendEmail = async (req, res) => {
       }
     );
 
-
     const registeredNumbers = new Set(
       users.map(user => user.phoneNumber)
     );
-
 
     const invalidRecipients = uniqueRecipients.filter(
       number => !registeredNumbers.has(number)
@@ -51,24 +48,59 @@ const sendEmail = async (req, res) => {
 
     if (invalidRecipients.length > 0) {
       return res.status(400).json({
-        message: "This (or) Some of these recipients are not registered on PhoneMail",
+        message:
+          "This (or) Some of these recipients are not registered on PhoneMail",
         invalidRecipients
       });
     }
 
-    const email = await Email.create({
-      sender: req.user.phoneNumber,
+    const sender = req.user.phoneNumber;
+
+    // One thread ID shared by sender + recipients
+    const emailThreadId =
+      threadId || Date.now().toString();
+
+    // --------------------------------
+    // CREATE SENDER'S SENT COPY
+    // --------------------------------
+
+    const sentEmail = await Email.create({
+      sender,
       recipients: uniqueRecipients,
       cc: cc || [],
       subject: subject || "",
       body,
-      threadId: threadId || Date.now().toString(),
-      folder: "sent"
+      threadId: emailThreadId,
+      folder: "sent",
+      isRead: true
     });
+
+    // --------------------------------
+    // CREATE RECIPIENT'S INBOX COPY
+    // --------------------------------
+
+    const inboxEmails = uniqueRecipients.map(
+      recipient => ({
+        sender,
+        recipients: [recipient],
+        cc: cc || [],
+        subject: subject || "",
+        body,
+        threadId: emailThreadId,
+        folder: "inbox",
+        isRead: false
+      })
+    );
+
+    await Email.insertMany(inboxEmails);
+
+    // --------------------------------
+    // RESPONSE
+    // --------------------------------
 
     res.status(201).json({
       message: "Email sent successfully",
-      email
+      email: sentEmail
     });
 
   } catch (error) {
@@ -83,25 +115,45 @@ const sendEmail = async (req, res) => {
 const getEmails = async (req, res) => {
   try {
     const phoneNumber = req.user.phoneNumber;
-    const { filter } = req.query;
 
-    let query = {
-      recipients: phoneNumber
-    };
+    const { unread, favorites } = req.query;
 
-    if (filter === "unread") {
-      query.isRead = false;
+    let filter;
+
+    // ⭐ FAVORITES
+    if (favorites === "true") {
+      filter = {
+        isFavorite: true,
+        $or: [
+          { recipients: phoneNumber },
+          { sender: phoneNumber }
+        ]
+      };
     }
 
-    if (filter === "favorites") {
-      query.isFavorite = true;
+    // 📖 UNREAD
+    else if (unread === "true") {
+      filter = {
+        recipients: phoneNumber,
+        sender: { $ne: phoneNumber },
+        folder: "inbox",
+        isRead: false
+      };
     }
 
-    const emails = await Email.find(query)
+    // 📥 NORMAL INBOX
+    else {
+      filter = {
+        recipients: phoneNumber,
+        sender: { $ne: phoneNumber },
+        folder: "inbox"
+      };
+    }
+
+    const emails = await Email.find(filter)
       .sort({ createdAt: -1 });
 
     res.status(200).json({
-      filter: filter || "all",
       emails
     });
 
@@ -145,13 +197,27 @@ const getConversation = async (req, res) => {
     const { threadId } = req.params;
     const phoneNumber = req.user.phoneNumber;
 
-    //! Check wether user
     const emails = await Email.find({
       threadId,
       $or: [
-        { sender: phoneNumber },
-        { recipients: phoneNumber },
-        { cc: phoneNumber }
+        {
+          sender: phoneNumber,
+          folder: {
+            $in: ["sent", "trash", "spam"]
+          }
+        },
+        {
+          recipients: phoneNumber,
+          folder: {
+            $in: ["inbox", "trash", "spam"]
+          }
+        },
+        {
+          cc: phoneNumber,
+          folder: {
+            $in: ["inbox", "trash", "spam"]
+          }
+        }
       ]
     }).sort({ createdAt: 1 });
 
@@ -201,18 +267,32 @@ const replyToEmail = async (req, res) => {
     }
 
     const currentUser = req.user.phoneNumber;
-
     const recipient = originalEmail.sender;
 
+    const replySubject = originalEmail.subject.startsWith("Re:")
+      ? originalEmail.subject
+      : `Re: ${originalEmail.subject}`;
+
+    // Sender's copy
     const reply = await Email.create({
       sender: currentUser,
       recipients: [recipient],
-      subject: originalEmail.subject.startsWith("Re:")
-        ? originalEmail.subject
-        : `Re: ${originalEmail.subject}`,
+      subject: replySubject,
       body,
       threadId: originalEmail.threadId,
-      folder: "sent"
+      folder: "sent",
+      isRead: true
+    });
+
+    // Recipient's copy
+    await Email.create({
+      sender: currentUser,
+      recipients: [recipient],
+      subject: replySubject,
+      body,
+      threadId: originalEmail.threadId,
+      folder: "inbox",
+      isRead: false
     });
 
     originalEmail.hasReplied = true;
@@ -323,20 +403,21 @@ const getSentEmails = async (req, res) => {
 
 const createDraft = async (req, res) => {
   try {
-    const {
-      recipients,
-      cc,
-      subject,
-      body
-    } = req.body;
+    const { recipients, subject, body } = req.body;
+
+    const phoneNumber = req.user.phoneNumber;
 
     const draft = await Email.create({
-      sender: req.user.phoneNumber,
+      sender: phoneNumber,
+
       recipients: recipients || [],
-      cc: cc || [],
+
       subject: subject || "",
+
       body: body || "",
-      threadId: Date.now().toString(),
+
+      threadId: `draft-${Date.now()}`,
+
       folder: "draft"
     });
 
@@ -349,7 +430,8 @@ const createDraft = async (req, res) => {
     console.error("Create draft error:", error);
 
     res.status(500).json({
-      message: "Failed to save draft"
+      message: "Failed to save draft",
+      error: error.message
     });
   }
 };
@@ -365,7 +447,7 @@ const getDrafts = async (req, res) => {
     }).sort({ createdAt: -1 });
 
     res.status(200).json({
-      drafts
+      emails: drafts
     });
 
   } catch (error) {
@@ -562,5 +644,100 @@ const permanentlyDeleteEmail = async (req, res) => {
 };
 
 
+const sendDraft = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { recipients, subject, body } = req.body;
 
-module.exports = { sendEmail, getEmails, getEmailById, getConversation, replyToEmail, markAsRead, toggleFavorite, getSentEmails, createDraft, getDrafts, moveToTrash, getTrash, moveToSpam, getSpam, restoreEmail, permanentlyDeleteEmail };
+    const sender = req.user.phoneNumber;
+
+    if (!recipients || recipients.length === 0) {
+      return res.status(400).json({
+        message: "At least one recipient is required"
+      });
+    }
+
+    if (!body) {
+      return res.status(400).json({
+        message: "Email body is required"
+      });
+    }
+
+    const draft = await Email.findOne({
+      _id: id,
+      sender,
+      folder: "draft"
+    });
+
+    if (!draft) {
+      return res.status(404).json({
+        message: "Draft not found"
+      });
+    }
+
+    const uniqueRecipients = [...new Set(recipients)];
+
+    // Make sure recipients are PhoneMail users
+    const users = await User.find({
+      phoneNumber: {
+        $in: uniqueRecipients
+      }
+    });
+
+    const registeredNumbers = new Set(
+      users.map(user => user.phoneNumber)
+    );
+
+    const invalidRecipients = uniqueRecipients.filter(
+      number => !registeredNumbers.has(number)
+    );
+
+    if (invalidRecipients.length > 0) {
+      return res.status(400).json({
+        message: "Some recipients are not registered on PhoneMail",
+        invalidRecipients
+      });
+    }
+
+    const threadId = Date.now().toString();
+
+    // Update draft → sent
+    draft.recipients = uniqueRecipients;
+    draft.subject = subject || "";
+    draft.body = body;
+    draft.threadId = threadId;
+    draft.folder = "sent";
+    draft.isRead = true;
+
+    await draft.save();
+
+    // Create inbox copies
+    const inboxEmails = uniqueRecipients.map(recipient => ({
+      sender,
+      recipients: [recipient],
+      subject: subject || "",
+      body,
+      threadId,
+      folder: "inbox",
+      isRead: false
+    }));
+
+    await Email.insertMany(inboxEmails);
+
+    res.status(200).json({
+      message: "Draft sent successfully",
+      email: draft
+    });
+
+  } catch (error) {
+    console.error("Send draft error:", error);
+
+    res.status(500).json({
+      message: "Failed to send draft"
+    });
+  }
+};
+
+
+
+module.exports = { sendEmail, getEmails, getEmailById, getConversation, replyToEmail, markAsRead, toggleFavorite, getSentEmails, createDraft, getDrafts, moveToTrash, getTrash, moveToSpam, getSpam, restoreEmail, permanentlyDeleteEmail, sendDraft };

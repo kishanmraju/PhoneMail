@@ -1,6 +1,6 @@
 const express = require("express");
 
-const { sendEmail, getEmails, getEmailById, getConversation, replyToEmail, markAsRead, toggleFavorite, getSentEmails, createDraft, getDrafts, moveToTrash, getTrash, moveToSpam, getSpam, restoreEmail, permanentlyDeleteEmail } = require("../controllers/emailController");
+const { sendEmail, getEmails, getEmailById, getConversation, replyToEmail, markAsRead, toggleFavorite, getSentEmails, createDraft, getDrafts, moveToTrash, getTrash, moveToSpam, getSpam, restoreEmail, permanentlyDeleteEmail, sendDraft } = require("../controllers/emailController");
 
 
 
@@ -17,6 +17,7 @@ router.get("/thread/:threadId", protect, getConversation);
 router.get("/sent", protect, getSentEmails);
 
 router.post("/drafts", protect, createDraft);
+router.post("/:id/send", protect, emailOwner, sendDraft);
 router.get("/drafts", protect, getDrafts);
 
 router.get("/trash", protect, getTrash);

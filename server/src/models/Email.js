@@ -52,7 +52,7 @@ const emailSchema = new mongoose.Schema(
 
     folder: {
       type: String,
-      enum: ["inbox", "sent", "trash"],
+      enum: ["inbox", "sent", "draft", "spam", "trash"],
       default: "inbox"
     }
   },

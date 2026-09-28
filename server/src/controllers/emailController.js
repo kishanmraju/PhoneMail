@@ -1,5 +1,45 @@
 const Email = require("../models/Email");
 const User = require("../models/User");
+const crypto = require("crypto");
+
+
+// ==========================================
+// CHECK WHETHER USER CAN ACCESS EMAIL
+// ==========================================
+
+const userCanAccessEmail = (email, phoneNumber) => {
+  if (!email) {
+    return false;
+  }
+
+  // Sender
+  if (email.sender === phoneNumber) {
+    return true;
+  }
+
+  // Recipient
+  if (
+    email.recipients &&
+    email.recipients.includes(phoneNumber)
+  ) {
+    return true;
+  }
+
+  // CC
+  if (
+    email.cc &&
+    email.cc.includes(phoneNumber)
+  ) {
+    return true;
+  }
+
+  return false;
+};
+
+
+// ==========================================
+// SEND EMAIL
+// ==========================================
 
 const sendEmail = async (req, res) => {
   try {
@@ -11,22 +51,72 @@ const sendEmail = async (req, res) => {
       threadId
     } = req.body;
 
-    if (!recipients || recipients.length === 0) {
+
+    // --------------------------------
+    // VALIDATION
+    // --------------------------------
+
+    if (
+      !recipients ||
+      !Array.isArray(recipients) ||
+      recipients.length === 0
+    ) {
       return res.status(400).json({
         message: "At least one recipient is required"
       });
     }
 
-    if (!body) {
+    if (!body || !body.trim()) {
       return res.status(400).json({
         message: "Email body is required"
       });
     }
 
-    // Remove duplicate recipients
-    const uniqueRecipients = [...new Set(recipients)];
 
-    // Check that all recipients are PhoneMail users
+    // --------------------------------
+    // REMOVE DUPLICATE RECIPIENTS
+    // --------------------------------
+
+    const uniqueRecipients = [
+      ...new Set(recipients)
+    ];
+
+
+    // --------------------------------
+    // REMOVE DUPLICATE CC
+    // --------------------------------
+
+    const uniqueCC = [
+      ...new Set(cc || [])
+    ];
+
+
+    // --------------------------------
+    // CHECK TO / CC OVERLAP
+    // --------------------------------
+
+    const overlappingRecipients =
+      uniqueRecipients.filter(
+        number =>
+          uniqueCC.includes(number)
+      );
+
+    if (
+      overlappingRecipients.length > 0
+    ) {
+      return res.status(400).json({
+        message:
+          "A recipient cannot appear in both To and CC",
+
+        overlappingRecipients
+      });
+    }
+
+
+    // --------------------------------
+    // CHECK THAT RECIPIENTS EXIST
+    // --------------------------------
+
     const users = await User.find(
       {
         phoneNumber: {
@@ -38,706 +128,1723 @@ const sendEmail = async (req, res) => {
       }
     );
 
-    const registeredNumbers = new Set(
-      users.map(user => user.phoneNumber)
-    );
 
-    const invalidRecipients = uniqueRecipients.filter(
-      number => !registeredNumbers.has(number)
-    );
+    const registeredNumbers =
+      new Set(
+        users.map(
+          user => user.phoneNumber
+        )
+      );
 
-    if (invalidRecipients.length > 0) {
+
+    const invalidRecipients =
+      uniqueRecipients.filter(
+        number =>
+          !registeredNumbers.has(number)
+      );
+
+
+    if (
+      invalidRecipients.length > 0
+    ) {
       return res.status(400).json({
         message:
           "This (or) Some of these recipients are not registered on PhoneMail",
+
         invalidRecipients
       });
     }
 
-    const sender = req.user.phoneNumber;
 
-    // One thread ID shared by sender + recipients
+    // --------------------------------
+    // CHECK THAT CC USERS EXIST
+    // --------------------------------
+
+    if (uniqueCC.length > 0) {
+      const ccUsers = await User.find(
+        {
+          phoneNumber: {
+            $in: uniqueCC
+          }
+        },
+        {
+          phoneNumber: 1
+        }
+      );
+
+
+      const registeredCCNumbers =
+        new Set(
+          ccUsers.map(
+            user => user.phoneNumber
+          )
+        );
+
+
+      const invalidCC =
+        uniqueCC.filter(
+          number =>
+            !registeredCCNumbers.has(
+              number
+            )
+        );
+
+
+      if (invalidCC.length > 0) {
+        return res.status(400).json({
+          message:
+            "Some CC recipients are not registered on PhoneMail",
+
+          invalidCC
+        });
+      }
+    }
+
+
+    // --------------------------------
+    // SENDER
+    // --------------------------------
+
+    const sender =
+      req.user.phoneNumber;
+
+
+    // --------------------------------
+    // THREAD ID
+    // --------------------------------
+
     const emailThreadId =
-      threadId || Date.now().toString();
+      threadId ||
+      crypto.randomUUID();
+
 
     // --------------------------------
     // CREATE SENDER'S SENT COPY
     // --------------------------------
 
-    const sentEmail = await Email.create({
-      sender,
-      recipients: uniqueRecipients,
-      cc: cc || [],
-      subject: subject || "",
-      body,
-      threadId: emailThreadId,
-      folder: "sent",
-      isRead: true
-    });
-
-    // --------------------------------
-    // CREATE RECIPIENT'S INBOX COPY
-    // --------------------------------
-
-    const inboxEmails = uniqueRecipients.map(
-      recipient => ({
+    const sentEmail =
+      await Email.create({
         sender,
-        recipients: [recipient],
-        cc: cc || [],
-        subject: subject || "",
-        body,
-        threadId: emailThreadId,
-        folder: "inbox",
-        isRead: false
-      })
+
+        recipients:
+          uniqueRecipients,
+
+        cc:
+          uniqueCC,
+
+        subject:
+          subject || "",
+
+        body:
+          body.trim(),
+
+        threadId:
+          emailThreadId,
+
+        folder:
+          "sent",
+
+        isRead:
+          true
+      });
+
+
+    // --------------------------------
+    // CREATE RECIPIENT INBOX COPIES
+    // --------------------------------
+
+    const inboxEmails =
+      uniqueRecipients.map(
+        recipient => ({
+          sender,
+
+          recipients: [
+            recipient
+          ],
+
+          cc:
+            uniqueCC,
+
+          subject:
+            subject || "",
+
+          body:
+            body.trim(),
+
+          threadId:
+            emailThreadId,
+
+          folder:
+            "inbox",
+
+          isRead:
+            false
+        })
+      );
+
+
+    await Email.insertMany(
+      inboxEmails
     );
 
-    await Email.insertMany(inboxEmails);
 
     // --------------------------------
     // RESPONSE
     // --------------------------------
 
     res.status(201).json({
-      message: "Email sent successfully",
-      email: sentEmail
+      message:
+        "Email sent successfully",
+
+      email:
+        sentEmail
     });
 
   } catch (error) {
-    console.error("Send email error:", error);
+    console.error(
+      "Send email error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to send email"
+      message:
+        "Failed to send email"
     });
   }
 };
 
+
+// ==========================================
+// GET EMAILS
+// ==========================================
+
 const getEmails = async (req, res) => {
   try {
-    const phoneNumber = req.user.phoneNumber;
+    const phoneNumber =
+      req.user.phoneNumber;
 
-    const { unread, favorites } = req.query;
+    const {
+      unread,
+      favorites
+    } = req.query;
 
     let filter;
 
-    // ⭐ FAVORITES
-    if (favorites === "true") {
+
+    // --------------------------------
+    // FAVORITES
+    // --------------------------------
+
+    if (
+      favorites === "true"
+    ) {
       filter = {
         isFavorite: true,
+
         $or: [
-          { recipients: phoneNumber },
-          { sender: phoneNumber }
+          {
+            recipients:
+              phoneNumber
+          },
+          {
+            cc:
+              phoneNumber
+          },
+          {
+            sender:
+              phoneNumber
+          }
         ]
       };
     }
 
-    // 📖 UNREAD
-    else if (unread === "true") {
+
+    // --------------------------------
+    // UNREAD
+    // --------------------------------
+
+    else if (
+      unread === "true"
+    ) {
       filter = {
-        recipients: phoneNumber,
-        sender: { $ne: phoneNumber },
-        folder: "inbox",
-        isRead: false
+        recipients:
+          phoneNumber,
+
+        sender: {
+          $ne:
+            phoneNumber
+        },
+
+        folder:
+          "inbox",
+
+        isRead:
+          false
       };
     }
 
-    // 📥 NORMAL INBOX
+
+    // --------------------------------
+    // NORMAL INBOX
+    // --------------------------------
+
     else {
       filter = {
-        recipients: phoneNumber,
-        sender: { $ne: phoneNumber },
-        folder: "inbox"
+        recipients:
+          phoneNumber,
+
+        sender: {
+          $ne:
+            phoneNumber
+        },
+
+        folder:
+          "inbox"
       };
     }
 
-    const emails = await Email.find(filter)
-      .sort({ createdAt: -1 });
+
+    const emails =
+      await Email.find(filter)
+        .sort({
+          createdAt:
+            -1
+        });
+
 
     res.status(200).json({
       emails
     });
 
   } catch (error) {
-    console.error("Get emails error:", error);
+    console.error(
+      "Get emails error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to fetch emails"
+      message:
+        "Failed to fetch emails"
     });
   }
 };
 
 
-const getEmailById = async (req, res) => {
+// ==========================================
+// GET EMAIL BY ID
+// ==========================================
+
+const getEmailById = async (
+  req,
+  res
+) => {
   try {
-    const email = await Email.findById(req.params.id);
+    const email =
+      await Email.findById(
+        req.params.id
+      );
+
 
     if (!email) {
       return res.status(404).json({
-        message: "Email not found"
+        message:
+          "Email not found"
       });
     }
+
+
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    if (
+      !userCanAccessEmail(
+        email,
+        phoneNumber
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
 
     res.status(200).json({
       email
     });
 
   } catch (error) {
-    console.error("Get email error:", error);
+    console.error(
+      "Get email error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to fetch email"
+      message:
+        "Failed to fetch email"
     });
   }
 };
 
 
+// ==========================================
+// GET CONVERSATION
+// ==========================================
 
-const getConversation = async (req, res) => {
+const getConversation = async (
+  req,
+  res
+) => {
   try {
-    const { threadId } = req.params;
-    const phoneNumber = req.user.phoneNumber;
+    const {
+      threadId
+    } = req.params;
 
-    const emails = await Email.find({
-      threadId,
-      $or: [
-        {
-          sender: phoneNumber,
-          folder: {
-            $in: ["sent", "trash", "spam"]
-          }
-        },
-        {
-          recipients: phoneNumber,
-          folder: {
-            $in: ["inbox", "trash", "spam"]
-          }
-        },
-        {
-          cc: phoneNumber,
-          folder: {
-            $in: ["inbox", "trash", "spam"]
-          }
-        }
-      ]
-    }).sort({ createdAt: 1 });
+    const phoneNumber =
+      req.user.phoneNumber;
 
-    if (emails.length === 0) {
+
+    const emails =
+      await Email.find({
+        threadId,
+
+        $or: [
+          {
+            sender:
+              phoneNumber,
+
+            folder: {
+              $in: [
+                "sent",
+                "trash",
+                "spam"
+              ]
+            }
+          },
+
+          {
+            recipients:
+              phoneNumber,
+
+            folder: {
+              $in: [
+                "inbox",
+                "trash",
+                "spam"
+              ]
+            }
+          },
+
+          {
+            cc:
+              phoneNumber,
+
+            folder: {
+              $in: [
+                "inbox",
+                "trash",
+                "spam"
+              ]
+            }
+          }
+        ]
+      }).sort({
+        createdAt:
+          1
+      });
+
+
+    if (
+      emails.length === 0
+    ) {
       return res.status(404).json({
-        message: "Conversation not found"
+        message:
+          "Conversation not found"
       });
     }
+
 
     res.status(200).json({
       emails
     });
 
   } catch (error) {
-    console.error("Get conversation error:", error);
+    console.error(
+      "Get conversation error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to fetch conversation"
+      message:
+        "Failed to fetch conversation"
     });
   }
 };
 
 
-const replyToEmail = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { body } = req.body;
+// ==========================================
+// REPLY TO EMAIL
+// ==========================================
 
-    if (!body) {
+const replyToEmail = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      id
+    } = req.params;
+
+    const {
+      body
+    } = req.body;
+
+
+    if (
+      !body ||
+      !body.trim()
+    ) {
       return res.status(400).json({
-        message: "Reply body is required"
+        message:
+          "Reply body is required"
       });
     }
 
-    const originalEmail = await Email.findById(id);
+
+    const originalEmail =
+      await Email.findById(id);
+
 
     if (!originalEmail) {
       return res.status(404).json({
-        message: "Original email not found"
+        message:
+          "Original email not found"
       });
     }
 
-    if (originalEmail.hasReplied) {
+
+    const currentUser =
+      req.user.phoneNumber;
+
+
+    // --------------------------------
+    // CHECK ACCESS
+    // --------------------------------
+
+    if (
+      !userCanAccessEmail(
+        originalEmail,
+        currentUser
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
+
+    // --------------------------------
+    // CHECK IF ALREADY REPLIED
+    // --------------------------------
+
+    if (
+      originalEmail.hasReplied
+    ) {
       return res.status(400).json({
-        message: "This email has already been replied to"
+        message:
+          "This email has already been replied to"
       });
     }
 
-    const currentUser = req.user.phoneNumber;
-    const recipient = originalEmail.sender;
 
-    const replySubject = originalEmail.subject.startsWith("Re:")
-      ? originalEmail.subject
-      : `Re: ${originalEmail.subject}`;
+    // --------------------------------
+    // ORIGINAL SENDER
+    // --------------------------------
 
-    // Sender's copy
-    const reply = await Email.create({
-      sender: currentUser,
-      recipients: [recipient],
-      subject: replySubject,
-      body,
-      threadId: originalEmail.threadId,
-      folder: "sent",
-      isRead: true
-    });
+    const recipient =
+      originalEmail.sender;
 
-    // Recipient's copy
+
+    // --------------------------------
+    // DON'T REPLY TO YOURSELF
+    // --------------------------------
+
+    if (
+      recipient === currentUser
+    ) {
+      return res.status(400).json({
+        message:
+          "You cannot reply to yourself"
+      });
+    }
+
+
+    // --------------------------------
+    // REPLY SUBJECT
+    // --------------------------------
+
+    const replySubject =
+      originalEmail.subject &&
+      originalEmail.subject.startsWith(
+        "Re:"
+      )
+        ? originalEmail.subject
+        : originalEmail.subject
+          ? `Re: ${originalEmail.subject}`
+          : "Re:";
+
+
+    // --------------------------------
+    // CREATE SENT REPLY
+    // --------------------------------
+
+    const reply =
+      await Email.create({
+        sender:
+          currentUser,
+
+        recipients: [
+          recipient
+        ],
+
+        subject:
+          replySubject,
+
+        body:
+          body.trim(),
+
+        threadId:
+          originalEmail.threadId,
+
+        folder:
+          "sent",
+
+        isRead:
+          true
+      });
+
+
+    // --------------------------------
+    // CREATE RECIPIENT INBOX COPY
+    // --------------------------------
+
     await Email.create({
-      sender: currentUser,
-      recipients: [recipient],
-      subject: replySubject,
-      body,
-      threadId: originalEmail.threadId,
-      folder: "inbox",
-      isRead: false
+      sender:
+        currentUser,
+
+      recipients: [
+        recipient
+      ],
+
+      subject:
+        replySubject,
+
+      body:
+        body.trim(),
+
+      threadId:
+        originalEmail.threadId,
+
+      folder:
+        "inbox",
+
+      isRead:
+        false
     });
 
-    originalEmail.hasReplied = true;
+
+    // --------------------------------
+    // MARK ORIGINAL AS REPLIED
+    // --------------------------------
+
+    originalEmail.hasReplied =
+      true;
+
     await originalEmail.save();
 
+
     res.status(201).json({
-      message: "Reply sent successfully",
-      email: reply
+      message:
+        "Reply sent successfully",
+
+      email:
+        reply
     });
 
   } catch (error) {
-    console.error("Reply error:", error);
+    console.error(
+      "Reply error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to send reply"
+      message:
+        "Failed to send reply"
     });
   }
 };
 
-const markAsRead = async (req, res) => {
-  try {
-    const { id } = req.params;
 
-    const email = await Email.findById(id);
+// ==========================================
+// MARK EMAIL AS READ
+// ==========================================
+
+const markAsRead = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      id
+    } = req.params;
+
+
+    const email =
+      await Email.findById(id);
+
 
     if (!email) {
       return res.status(404).json({
-        message: "Email not found"
+        message:
+          "Email not found"
       });
     }
 
-    email.isRead = true;
+
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    if (
+      !userCanAccessEmail(
+        email,
+        phoneNumber
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
+
+    email.isRead =
+      true;
+
 
     await email.save();
 
+
     res.status(200).json({
-      message: "Email marked as read",
+      message:
+        "Email marked as read",
+
       email
     });
 
   } catch (error) {
-    console.error("Mark as read error:", error);
+    console.error(
+      "Mark as read error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to mark email as read"
+      message:
+        "Failed to mark email as read"
     });
   }
 };
 
 
-const toggleFavorite = async (req, res) => {
-  try {
-    const { id } = req.params;
+// ==========================================
+// TOGGLE FAVORITE
+// ==========================================
 
-    const email = await Email.findById(id);
+const toggleFavorite = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      id
+    } = req.params;
+
+
+    const email =
+      await Email.findById(id);
+
 
     if (!email) {
       return res.status(404).json({
-        message: "Email not found"
+        message:
+          "Email not found"
       });
     }
 
-    // ? THIS IS THE HIGHLIGHT. THIS IS A FREAKING TOGGLE :O
-    email.isFavorite = !email.isFavorite;
+
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    if (
+      !userCanAccessEmail(
+        email,
+        phoneNumber
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
+
+    email.isFavorite =
+      !email.isFavorite;
+
 
     await email.save();
 
+
     res.status(200).json({
-      message: email.isFavorite
-        ? "Email added to favorites"
-        : "Email removed from favorites",
+      message:
+        email.isFavorite
+          ? "Email added to favorites"
+          : "Email removed from favorites",
+
       email
     });
 
   } catch (error) {
-    console.error("Toggle favorite error:", error);
+    console.error(
+      "Toggle favorite error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to update favorite"
+      message:
+        "Failed to update favorite"
     });
   }
 };
 
 
-const getSentEmails = async (req, res) => {
-  try {
-    const phoneNumber = req.user.phoneNumber;
+// ==========================================
+// GET SENT EMAILS
+// ==========================================
 
-    const emails = await Email.find({
-      sender: phoneNumber,
-      folder: "sent"
-    }).sort({ createdAt: -1 });
+const getSentEmails = async (
+  req,
+  res
+) => {
+  try {
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    const emails =
+      await Email.find({
+        sender:
+          phoneNumber,
+
+        folder:
+          "sent"
+      }).sort({
+        createdAt:
+          -1
+      });
+
 
     res.status(200).json({
       emails
     });
 
   } catch (error) {
-    console.error("Get sent emails error:", error);
+    console.error(
+      "Get sent emails error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to fetch sent emails"
+      message:
+        "Failed to fetch sent emails"
     });
   }
 };
 
 
+// ==========================================
+// CREATE DRAFT
+// ==========================================
 
-const createDraft = async (req, res) => {
+const createDraft = async (
+  req,
+  res
+) => {
   try {
-    const { recipients, subject, body } = req.body;
+    const {
+      recipients,
+      cc,
+      subject,
+      body
+    } = req.body;
 
-    const phoneNumber = req.user.phoneNumber;
 
-    const draft = await Email.create({
-      sender: phoneNumber,
+    const phoneNumber =
+      req.user.phoneNumber;
 
-      recipients: recipients || [],
 
-      subject: subject || "",
+    const uniqueRecipients =
+      Array.isArray(recipients)
+        ? [...new Set(recipients)]
+        : [];
 
-      body: body || "",
 
-      threadId: `draft-${Date.now()}`,
+    const uniqueCC =
+      Array.isArray(cc)
+        ? [...new Set(cc)]
+        : [];
 
-      folder: "draft"
-    });
+
+    const draft =
+      await Email.create({
+        sender:
+          phoneNumber,
+
+        recipients:
+          uniqueRecipients,
+
+        cc:
+          uniqueCC,
+
+        subject:
+          subject || "",
+
+        body:
+          body || "",
+
+        threadId:
+          `draft-${crypto.randomUUID()}`,
+
+        folder:
+          "draft"
+      });
+
 
     res.status(201).json({
-      message: "Draft saved successfully",
+      message:
+        "Draft saved successfully",
+
       draft
     });
 
   } catch (error) {
-    console.error("Create draft error:", error);
+    console.error(
+      "Create draft error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to save draft",
-      error: error.message
+      message:
+        "Failed to save draft",
+
+      error:
+        error.message
     });
   }
 };
 
 
-const getDrafts = async (req, res) => {
-  try {
-    const phoneNumber = req.user.phoneNumber;
+// ==========================================
+// GET DRAFTS
+// ==========================================
 
-    const drafts = await Email.find({
-      sender: phoneNumber,
-      folder: "draft"
-    }).sort({ createdAt: -1 });
+const getDrafts = async (
+  req,
+  res
+) => {
+  try {
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    const drafts =
+      await Email.find({
+        sender:
+          phoneNumber,
+
+        folder:
+          "draft"
+      }).sort({
+        createdAt:
+          -1
+      });
+
 
     res.status(200).json({
-      emails: drafts
+      emails:
+        drafts
     });
 
   } catch (error) {
-    console.error("Get drafts error:", error);
+    console.error(
+      "Get drafts error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to fetch drafts"
+      message:
+        "Failed to fetch drafts"
     });
   }
 };
 
 
+// ==========================================
+// MOVE EMAIL TO TRASH
+// ==========================================
 
-const moveToTrash = async (req, res) => {
+const moveToTrash = async (
+  req,
+  res
+) => {
   try {
-    const { id } = req.params;
+    const {
+      id
+    } = req.params;
 
-    const email = await Email.findById(id);
+
+    const email =
+      await Email.findById(id);
+
 
     if (!email) {
       return res.status(404).json({
-        message: "Email not found"
+        message:
+          "Email not found"
       });
     }
 
-    email.folder = "trash";
+
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    if (
+      !userCanAccessEmail(
+        email,
+        phoneNumber
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
+
+    email.folder =
+      "trash";
+
 
     await email.save();
 
+
     res.status(200).json({
-      message: "Email moved to trash",
+      message:
+        "Email moved to trash",
+
       email
     });
 
   } catch (error) {
-    console.error("Move to trash error:", error);
+    console.error(
+      "Move to trash error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to move email to trash"
+      message:
+        "Failed to move email to trash"
     });
   }
 };
 
 
+// ==========================================
+// GET TRASH
+// ==========================================
 
-
-const getTrash = async (req, res) => {
+const getTrash = async (
+  req,
+  res
+) => {
   try {
-    const phoneNumber = req.user.phoneNumber;
+    const phoneNumber =
+      req.user.phoneNumber;
 
-    const emails = await Email.find({
-      recipients: phoneNumber,
-      folder: "trash"
-    }).sort({ createdAt: -1 });
+
+    const emails =
+      await Email.find({
+        $or: [
+          {
+            recipients:
+              phoneNumber
+          },
+          {
+            cc:
+              phoneNumber
+          }
+        ],
+
+        folder:
+          "trash"
+      }).sort({
+        createdAt:
+          -1
+      });
+
 
     res.status(200).json({
       emails
     });
 
   } catch (error) {
-    console.error("Get trash error:", error);
+    console.error(
+      "Get trash error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to fetch trash"
+      message:
+        "Failed to fetch trash"
     });
   }
 };
 
 
+// ==========================================
+// MOVE EMAIL TO SPAM
+// ==========================================
 
-const moveToSpam = async (req, res) => {
+const moveToSpam = async (
+  req,
+  res
+) => {
   try {
-    const { id } = req.params;
+    const {
+      id
+    } = req.params;
 
-    const email = await Email.findById(id);
+
+    const email =
+      await Email.findById(id);
+
 
     if (!email) {
       return res.status(404).json({
-        message: "Email not found"
+        message:
+          "Email not found"
       });
     }
 
-    email.folder = "spam";
+
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    if (
+      !userCanAccessEmail(
+        email,
+        phoneNumber
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
+
+    email.folder =
+      "spam";
+
 
     await email.save();
 
+
     res.status(200).json({
-      message: "Email moved to spam",
+      message:
+        "Email moved to spam",
+
       email
     });
 
   } catch (error) {
-    console.error("Move to spam error:", error);
+    console.error(
+      "Move to spam error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to move email to spam"
+      message:
+        "Failed to move email to spam"
     });
   }
 };
 
 
+// ==========================================
+// GET SPAM
+// ==========================================
 
-const getSpam = async (req, res) => {
+const getSpam = async (
+  req,
+  res
+) => {
   try {
-    const phoneNumber = req.user.phoneNumber;
+    const phoneNumber =
+      req.user.phoneNumber;
 
-    const emails = await Email.find({
-      recipients: phoneNumber,
-      folder: "spam"
-    }).sort({ createdAt: -1 });
+
+    const emails =
+      await Email.find({
+        $or: [
+          {
+            recipients:
+              phoneNumber
+          },
+          {
+            cc:
+              phoneNumber
+          }
+        ],
+
+        folder:
+          "spam"
+      }).sort({
+        createdAt:
+          -1
+      });
+
 
     res.status(200).json({
       emails
     });
 
   } catch (error) {
-    console.error("Get spam error:", error);
+    console.error(
+      "Get spam error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to fetch spam"
+      message:
+        "Failed to fetch spam"
     });
   }
 };
 
 
-const restoreEmail = async (req, res) => {
-  try {
-    const { id } = req.params;
+// ==========================================
+// RESTORE EMAIL
+// ==========================================
 
-    const email = await Email.findById(id);
+const restoreEmail = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      id
+    } = req.params;
+
+
+    const email =
+      await Email.findById(id);
+
 
     if (!email) {
       return res.status(404).json({
-        message: "Email not found"
+        message:
+          "Email not found"
       });
     }
 
-    if (email.folder !== "trash" && email.folder !== "spam") {
+
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    if (
+      !userCanAccessEmail(
+        email,
+        phoneNumber
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
+
+    if (
+      email.folder !== "trash" &&
+      email.folder !== "spam"
+    ) {
       return res.status(400).json({
-        message: "Only emails in trash or spam can be restored"
+        message:
+          "Only emails in trash or spam can be restored"
       });
     }
 
-    email.folder = "inbox";
+
+    email.folder =
+      "inbox";
+
 
     await email.save();
 
+
     res.status(200).json({
-      message: "Email restored successfully",
+      message:
+        "Email restored successfully",
+
       email
     });
 
   } catch (error) {
-    console.error("Restore email error:", error);
+    console.error(
+      "Restore email error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to restore email"
+      message:
+        "Failed to restore email"
     });
   }
 };
 
 
-const permanentlyDeleteEmail = async (req, res) => {
-  try {
-    const { id } = req.params;
+// ==========================================
+// PERMANENTLY DELETE EMAIL
+// ==========================================
 
-    const email = await Email.findById(id);
+const permanentlyDeleteEmail = async (
+  req,
+  res
+) => {
+  try {
+    const {
+      id
+    } = req.params;
+
+
+    const email =
+      await Email.findById(id);
+
 
     if (!email) {
       return res.status(404).json({
-        message: "Email not found"
+        message:
+          "Email not found"
       });
     }
 
-    if (email.folder !== "trash") {
+
+    const phoneNumber =
+      req.user.phoneNumber;
+
+
+    if (
+      !userCanAccessEmail(
+        email,
+        phoneNumber
+      )
+    ) {
+      return res.status(403).json({
+        message:
+          "Access denied"
+      });
+    }
+
+
+    if (
+      email.folder !== "trash"
+    ) {
       return res.status(400).json({
-        message: "Only emails in trash can be permanently deleted"
+        message:
+          "Only emails in trash can be permanently deleted"
       });
     }
 
-    await Email.findByIdAndDelete(id);
+
+    await Email.findByIdAndDelete(
+      id
+    );
+
 
     res.status(200).json({
-      message: "Email permanently deleted"
+      message:
+        "Email permanently deleted"
     });
 
   } catch (error) {
-    console.error("Permanent delete error:", error);
+    console.error(
+      "Permanent delete error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to permanently delete email"
+      message:
+        "Failed to permanently delete email"
     });
   }
 };
 
 
-const sendDraft = async (req, res) => {
+// ==========================================
+// SEND DRAFT
+// ==========================================
+
+const sendDraft = async (
+  req,
+  res
+) => {
   try {
-    const { id } = req.params;
-    const { recipients, subject, body } = req.body;
+    const {
+      id
+    } = req.params;
 
-    const sender = req.user.phoneNumber;
 
-    if (!recipients || recipients.length === 0) {
+    const {
+      recipients,
+      cc,
+      subject,
+      body
+    } = req.body;
+
+
+    const sender =
+      req.user.phoneNumber;
+
+
+    // --------------------------------
+    // VALIDATION
+    // --------------------------------
+
+    if (
+      !recipients ||
+      !Array.isArray(recipients) ||
+      recipients.length === 0
+    ) {
       return res.status(400).json({
-        message: "At least one recipient is required"
+        message:
+          "At least one recipient is required"
       });
     }
 
-    if (!body) {
+
+    if (
+      !body ||
+      !body.trim()
+    ) {
       return res.status(400).json({
-        message: "Email body is required"
+        message:
+          "Email body is required"
       });
     }
 
-    const draft = await Email.findOne({
-      _id: id,
-      sender,
-      folder: "draft"
-    });
+
+    // --------------------------------
+    // FIND DRAFT
+    // --------------------------------
+
+    const draft =
+      await Email.findOne({
+        _id:
+          id,
+
+        sender:
+          sender,
+
+        folder:
+          "draft"
+      });
+
 
     if (!draft) {
       return res.status(404).json({
-        message: "Draft not found"
+        message:
+          "Draft not found"
       });
     }
 
-    const uniqueRecipients = [...new Set(recipients)];
 
-    // Make sure recipients are PhoneMail users
-    const users = await User.find({
-      phoneNumber: {
-        $in: uniqueRecipients
-      }
-    });
+    // --------------------------------
+    // UNIQUE RECIPIENTS
+    // --------------------------------
 
-    const registeredNumbers = new Set(
-      users.map(user => user.phoneNumber)
-    );
+    const uniqueRecipients =
+      [
+        ...new Set(
+          recipients
+        )
+      ];
 
-    const invalidRecipients = uniqueRecipients.filter(
-      number => !registeredNumbers.has(number)
-    );
 
-    if (invalidRecipients.length > 0) {
+    // --------------------------------
+    // UNIQUE CC
+    // --------------------------------
+
+    const uniqueCC =
+      [
+        ...new Set(
+          cc || []
+        )
+      ];
+
+
+    // --------------------------------
+    // CHECK TO / CC OVERLAP
+    // --------------------------------
+
+    const overlappingRecipients =
+      uniqueRecipients.filter(
+        number =>
+          uniqueCC.includes(
+            number
+          )
+      );
+
+
+    if (
+      overlappingRecipients.length > 0
+    ) {
       return res.status(400).json({
-        message: "Some recipients are not registered on PhoneMail",
+        message:
+          "A recipient cannot appear in both To and CC",
+
+        overlappingRecipients
+      });
+    }
+
+
+    // --------------------------------
+    // CHECK RECIPIENTS
+    // --------------------------------
+
+    const users =
+      await User.find({
+        phoneNumber: {
+          $in:
+            uniqueRecipients
+        }
+      });
+
+
+    const registeredNumbers =
+      new Set(
+        users.map(
+          user =>
+            user.phoneNumber
+        )
+      );
+
+
+    const invalidRecipients =
+      uniqueRecipients.filter(
+        number =>
+          !registeredNumbers.has(
+            number
+          )
+      );
+
+
+    if (
+      invalidRecipients.length > 0
+    ) {
+      return res.status(400).json({
+        message:
+          "Some recipients are not registered on PhoneMail",
+
         invalidRecipients
       });
     }
 
-    const threadId = Date.now().toString();
 
-    // Update draft → sent
-    draft.recipients = uniqueRecipients;
-    draft.subject = subject || "";
-    draft.body = body;
-    draft.threadId = threadId;
-    draft.folder = "sent";
-    draft.isRead = true;
+    // --------------------------------
+    // CHECK CC USERS
+    // --------------------------------
+
+    if (
+      uniqueCC.length > 0
+    ) {
+      const ccUsers =
+        await User.find({
+          phoneNumber: {
+            $in:
+              uniqueCC
+          }
+        });
+
+
+      const registeredCCNumbers =
+        new Set(
+          ccUsers.map(
+            user =>
+              user.phoneNumber
+          )
+        );
+
+
+      const invalidCC =
+        uniqueCC.filter(
+          number =>
+            !registeredCCNumbers.has(
+              number
+            )
+        );
+
+
+      if (
+        invalidCC.length > 0
+      ) {
+        return res.status(400).json({
+          message:
+            "Some CC recipients are not registered on PhoneMail",
+
+          invalidCC
+        });
+      }
+    }
+
+
+    // --------------------------------
+    // CREATE NEW THREAD ID
+    // --------------------------------
+
+    const threadId =
+      crypto.randomUUID();
+
+
+    // --------------------------------
+    // UPDATE DRAFT → SENT
+    // --------------------------------
+
+    draft.recipients =
+      uniqueRecipients;
+
+    draft.cc =
+      uniqueCC;
+
+    draft.subject =
+      subject || "";
+
+    draft.body =
+      body.trim();
+
+    draft.threadId =
+      threadId;
+
+    draft.folder =
+      "sent";
+
+    draft.isRead =
+      true;
+
 
     await draft.save();
 
-    // Create inbox copies
-    const inboxEmails = uniqueRecipients.map(recipient => ({
-      sender,
-      recipients: [recipient],
-      subject: subject || "",
-      body,
-      threadId,
-      folder: "inbox",
-      isRead: false
-    }));
 
-    await Email.insertMany(inboxEmails);
+    // --------------------------------
+    // CREATE INBOX COPIES
+    // --------------------------------
+
+    const inboxEmails =
+      uniqueRecipients.map(
+        recipient => ({
+          sender,
+
+          recipients: [
+            recipient
+          ],
+
+          cc:
+            uniqueCC,
+
+          subject:
+            subject || "",
+
+          body:
+            body.trim(),
+
+          threadId,
+
+          folder:
+            "inbox",
+
+          isRead:
+            false
+        })
+      );
+
+
+    await Email.insertMany(
+      inboxEmails
+    );
+
+
+    // --------------------------------
+    // RESPONSE
+    // --------------------------------
 
     res.status(200).json({
-      message: "Draft sent successfully",
-      email: draft
+      message:
+        "Draft sent successfully",
+
+      email:
+        draft
     });
 
   } catch (error) {
-    console.error("Send draft error:", error);
+    console.error(
+      "Send draft error:",
+      error
+    );
 
     res.status(500).json({
-      message: "Failed to send draft"
+      message:
+        "Failed to send draft"
     });
   }
 };
 
 
+// ==========================================
+// EXPORTS
+// ==========================================
 
-module.exports = { sendEmail, getEmails, getEmailById, getConversation, replyToEmail, markAsRead, toggleFavorite, getSentEmails, createDraft, getDrafts, moveToTrash, getTrash, moveToSpam, getSpam, restoreEmail, permanentlyDeleteEmail, sendDraft };
+module.exports = {
+  sendEmail,
+  getEmails,
+  getEmailById,
+  getConversation,
+  replyToEmail,
+  markAsRead,
+  toggleFavorite,
+  getSentEmails,
+  createDraft,
+  getDrafts,
+  moveToTrash,
+  getTrash,
+  moveToSpam,
+  getSpam,
+  restoreEmail,
+  permanentlyDeleteEmail,
+  sendDraft
+};

@@ -8,7 +8,6 @@ function App() {
 
   const [screen, setScreen] = useState(() => {
     const savedToken = localStorage.getItem("token");
-
     return savedToken ? 5 : 1;
   });
 
@@ -40,33 +39,11 @@ function App() {
   const [replyBody, setReplyBody] = useState("");
   const [replyLoading, setReplyLoading] = useState(false);
 
-  // --------------------------------------------------
-  // TOAST
-  // --------------------------------------------------
+  const [showProfile, setShowProfile] = useState(false);
+  const [profileName, setProfileName] = useState("");
 
   const [toasts, setToasts] = useState([]);
   const toastTimers = useRef({});
-
-  const showToast = (message, icon = "✓") => {
-    const id = Date.now() + Math.random();
-
-    setToasts((currentToasts) => [
-      ...currentToasts,
-      {
-        id,
-        message,
-        icon
-      }
-    ]);
-
-    toastTimers.current[id] = setTimeout(() => {
-      setToasts((currentToasts) =>
-        currentToasts.filter((toast) => toast.id !== id)
-      );
-
-      delete toastTimers.current[id];
-    }, 3000);
-  };
 
   const languages = [
     { name: "English", native: "English" },
@@ -79,6 +56,88 @@ function App() {
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
 
+  // --------------------------------------------------
+  // HELPERS
+  // --------------------------------------------------
+
+  const parseRecipients = (value) => {
+    return value
+      .split(",")
+      .map((number) =>
+        number.replace(/\D/g, "").trim()
+      )
+      .filter(Boolean);
+  };
+
+  const clearConversation = () => {
+    setSelectedEmail(null);
+    setConversation([]);
+    setReplyBody("");
+  };
+
+  const resetCompose = () => {
+    setShowCompose(false);
+    setEditingDraft(null);
+    setRecipient("");
+    setSubject("");
+    setBody("");
+    setError("");
+  };
+
+  // --------------------------------------------------
+  // TOAST
+  // --------------------------------------------------
+
+  const showToast = (message, icon = "✓") => {
+    const id = Date.now() + Math.random();
+
+    setToasts((currentToasts) => [
+      ...currentToasts,
+      {
+        id,
+        message,
+        icon,
+      },
+    ]);
+
+    toastTimers.current[id] = setTimeout(() => {
+      setToasts((currentToasts) =>
+        currentToasts.filter(
+          (toast) => toast.id !== id
+        )
+      );
+
+      delete toastTimers.current[id];
+    }, 3000);
+  };
+
+  // --------------------------------------------------
+  // AUTH ERROR
+  // --------------------------------------------------
+
+  const handleAuthError = () => {
+    localStorage.removeItem("token");
+    localStorage.removeItem("user");
+
+    setScreen(1);
+
+    setEmails([]);
+    setConversation([]);
+    setSelectedEmail(null);
+
+    setPhoneNumber("");
+    setOtp("");
+
+    resetCompose();
+
+    setUnreadCount(0);
+    setView("inbox");
+
+    showToast(
+      "Session expired. Please login again.",
+      "!"
+    );
+  };
 
   // --------------------------------------------------
   // OPEN CONVERSATION
@@ -90,23 +149,29 @@ function App() {
         `${API_URL}/api/emails/thread/${email.threadId}`,
         {
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to fetch conversation"
+          data.message ||
+          "Failed to fetch conversation"
         );
       }
 
-      setConversation(data.emails);
+      setConversation(data.emails || []);
       setSelectedEmail(email);
 
-      // Mark received email as read
+      // Mark incoming unread email as read
       if (
         !email.isRead &&
         email.sender !== user.phoneNumber
@@ -116,37 +181,65 @@ function App() {
           {
             method: "PATCH",
             headers: {
-              Authorization: `Bearer ${token}`
-            }
+              Authorization: `Bearer ${token}`,
+            },
           }
         );
+
+        if (readResponse.status === 401) {
+          handleAuthError();
+          return;
+        }
 
         if (readResponse.ok) {
           setEmails((currentEmails) => {
             if (view === "unread") {
               return currentEmails.filter(
-                (item) => item._id !== email._id
+                (item) =>
+                  item._id !== email._id
               );
             }
 
             return currentEmails.map((item) =>
               item._id === email._id
-                ? { ...item, isRead: true }
+                ? {
+                  ...item,
+                  isRead: true,
+                }
                 : item
             );
           });
 
+          setSelectedEmail((currentEmail) =>
+            currentEmail
+              ? {
+                ...currentEmail,
+                isRead: true,
+              }
+              : currentEmail
+          );
+
           setUnreadCount((currentCount) =>
-            Math.max(0, currentCount - 1)
+            Math.max(
+              0,
+              currentCount - 1
+            )
           );
         }
       }
-
     } catch (error) {
-      console.error("Conversation error:", error);
+      console.error(
+        "Conversation error:",
+        error
+      );
+
+      showToast(
+        error.message ||
+        "Failed to open conversation",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // SEND REPLY
@@ -157,45 +250,113 @@ function App() {
       return;
     }
 
+    if (!conversation.length) {
+      return;
+    }
+
+    /*
+      We can only reply to an incoming message.
+
+      Also, every individual message can only
+      receive one reply according to the backend.
+    */
+    const replyTarget = [...conversation]
+      .reverse()
+      .find(
+        (message) =>
+          message.sender !==
+          user.phoneNumber &&
+          !message.hasReplied
+      );
+
+    if (!replyTarget) {
+      showToast(
+        "There is no message available to reply to.",
+        "!"
+      );
+
+      return;
+    }
+
     try {
       setReplyLoading(true);
 
       const response = await fetch(
-        `${API_URL}/api/emails/${selectedEmail._id}/reply`,
+        `${API_URL}/api/emails/${replyTarget._id}/reply`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            body: replyBody
-          })
+            body: replyBody.trim(),
+          }),
         }
       );
 
       const data = await response.json();
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to send reply"
+          data.message ||
+          "Failed to send reply"
         );
       }
 
-      await openConversation(selectedEmail);
-
       setReplyBody("");
 
-      showToast("Reply sent successfully", "📤");
+      // Refresh conversation directly
+      const conversationResponse =
+        await fetch(
+          `${API_URL}/api/emails/thread/${selectedEmail.threadId}`,
+          {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          }
+        );
 
+      const conversationData =
+        await conversationResponse.json();
+
+      if (
+        conversationResponse.status === 401
+      ) {
+        handleAuthError();
+        return;
+      }
+
+      if (conversationResponse.ok) {
+        setConversation(
+          conversationData.emails || []
+        );
+      }
+
+      showToast(
+        "Reply sent successfully",
+        "📤"
+      );
     } catch (error) {
-      console.error("Reply error:", error);
-      alert(error.message);
+      console.error(
+        "Reply error:",
+        error
+      );
+
+      showToast(
+        error.message ||
+        "Failed to send reply",
+        "!"
+      );
     } finally {
       setReplyLoading(false);
     }
   };
-
 
   // --------------------------------------------------
   // SEND OTP
@@ -223,20 +384,18 @@ function App() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to send OTP"
+          data.message ||
+          "Failed to send OTP"
         );
       }
 
       setScreen(4);
-
     } catch (error) {
       setError(error.message);
-
     } finally {
       setLoading(false);
     }
   };
-
 
   // --------------------------------------------------
   // VERIFY OTP
@@ -265,118 +424,155 @@ function App() {
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to verify OTP"
+          data.message ||
+          "Failed to verify OTP"
         );
       }
 
-      localStorage.setItem("token", data.token);
+      localStorage.setItem(
+        "token",
+        data.token
+      );
+
       localStorage.setItem(
         "user",
         JSON.stringify(data.user)
       );
 
-      console.log("Logged in user:", data.user);
-
       setScreen(5);
 
+      setPhoneNumber("");
+      setOtp("");
+      setError("");
+      setView("inbox");
     } catch (error) {
       setError(error.message);
-
     } finally {
       setLoading(false);
     }
   };
 
-
   // --------------------------------------------------
   // FETCH EMAILS
   // --------------------------------------------------
 
-  const fetchEmails = async () => {
+  const fetchEmails = async (
+    targetView = view
+  ) => {
+    if (!token) {
+      return;
+    }
+
     try {
       let url = `${API_URL}/api/emails`;
 
-      if (view === "sent") {
+      if (targetView === "sent") {
         url = `${API_URL}/api/emails/sent`;
       }
 
-      if (view === "favorite") {
-        url = `${API_URL}/api/emails?favorites=true`;
+      if (targetView === "favorite") {
+        url =
+          `${API_URL}/api/emails` +
+          `?favorites=true`;
       }
 
-      if (view === "unread") {
-        url = `${API_URL}/api/emails?unread=true`;
+      if (targetView === "unread") {
+        url =
+          `${API_URL}/api/emails` +
+          `?unread=true`;
       }
 
-      if (view === "draft") {
+      if (targetView === "draft") {
         url = `${API_URL}/api/emails/drafts`;
       }
 
-      if (view === "spam") {
+      if (targetView === "spam") {
         url = `${API_URL}/api/emails/spam`;
       }
 
-      if (view === "trash") {
+      if (targetView === "trash") {
         url = `${API_URL}/api/emails/trash`;
       }
 
-      const response = await fetch(
-        url,
-        {
-          headers: {
-            Authorization: `Bearer ${token}`
-          }
-        }
-      );
+      const response = await fetch(url, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       const data = await response.json();
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to fetch emails"
+          data.message ||
+          "Failed to fetch emails"
         );
       }
 
       setEmails(data.emails || []);
-
     } catch (error) {
       console.error(
         "Fetch emails error:",
         error
       );
+
+      showToast(
+        error.message ||
+        "Failed to fetch emails",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // FETCH UNREAD COUNT
   // --------------------------------------------------
 
   const fetchUnreadCount = async () => {
+    if (!token) {
+      return;
+    }
+
     try {
       const response = await fetch(
         `${API_URL}/api/emails`,
         {
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to fetch unread count"
+          data.message ||
+          "Failed to fetch unread count"
         );
       }
 
-      const unreadEmails = (data.emails || []).filter(
-        (email) => !email.isRead
+      const unreadEmails = (
+        data.emails || []
+      ).filter(
+        (email) =>
+          !email.isRead &&
+          email.sender !== user.phoneNumber
       );
 
-      setUnreadCount(unreadEmails.length);
-
+      setUnreadCount(
+        unreadEmails.length
+      );
     } catch (error) {
       console.error(
         "Fetch unread count error:",
@@ -385,47 +581,53 @@ function App() {
     }
   };
 
-
   // --------------------------------------------------
   // FETCH DRAFTS
   // --------------------------------------------------
 
   const fetchDrafts = async () => {
+    if (!token) {
+      return;
+    }
+
     try {
       const response = await fetch(
         `${API_URL}/api/emails/drafts`,
         {
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
 
-      console.log(
-        "DRAFT RESPONSE:",
-        data
-      );
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
-          data.message || "Failed to fetch drafts"
+          data.message ||
+          "Failed to fetch drafts"
         );
       }
 
       setEmails(data.emails || []);
-
     } catch (error) {
       console.error(
         "Fetch drafts error:",
         error
       );
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "Failed to fetch drafts",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // OPEN DRAFT
@@ -435,9 +637,7 @@ function App() {
     setEditingDraft(draft);
 
     setRecipient(
-      draft.recipients?.length > 0
-        ? draft.recipients[0]
-        : ""
+      draft.recipients?.join(", ") || ""
     );
 
     setSubject(
@@ -448,9 +648,9 @@ function App() {
       draft.body || ""
     );
 
+    setError("");
     setShowCompose(true);
   };
-
 
   // --------------------------------------------------
   // FETCH DATA WHEN VIEW CHANGES
@@ -463,36 +663,50 @@ function App() {
     }
   }, [screen, view]);
 
-
   // --------------------------------------------------
   // SEARCH USER
   // --------------------------------------------------
 
   const searchUser = async () => {
-    if (!searchPhone.trim()) {
+    const cleanedPhone =
+      searchPhone.replace(/\D/g, "");
+
+    if (cleanedPhone.length !== 10) {
+      showToast(
+        "Enter a valid 10-digit phone number.",
+        "!"
+      );
+
       return;
     }
 
     try {
       const response = await fetch(
-        `${API_URL}/api/users/search?phoneNumber=${searchPhone}`,
+        `${API_URL}/api/users/search?phoneNumber=${encodeURIComponent(
+          cleanedPhone
+        )}`,
         {
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
 
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
       if (!response.ok) {
         throw new Error(
-          data.message || "User not found"
+          data.message ||
+          "User not found"
         );
       }
 
       setSearchedUser(data.user);
-
     } catch (error) {
       console.error(
         "Search user error:",
@@ -501,45 +715,60 @@ function App() {
 
       setSearchedUser(null);
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "User not found",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // SELECT RECIPIENT
   // --------------------------------------------------
 
-  const selectRecipient = (user) => {
+  const selectRecipient = (
+    searchedUser
+  ) => {
     setRecipient(
-      user.phoneNumber
+      searchedUser.phoneNumber
     );
+
+    setEditingDraft(null);
+    setSubject("");
+    setBody("");
+    setError("");
 
     setShowCompose(true);
 
     setSearchedUser(null);
-
     setSearchPhone("");
   };
-
 
   // --------------------------------------------------
   // FAVORITE
   // --------------------------------------------------
 
-  const toggleFavorite = async (emailId) => {
+  const toggleFavorite = async (
+    emailId
+  ) => {
     try {
       const response = await fetch(
         `${API_URL}/api/emails/${emailId}/favorite`,
         {
           method: "PATCH",
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -550,34 +779,50 @@ function App() {
 
       await fetchEmails();
 
+      showToast(
+        data.email?.isFavorite
+          ? "Added to Favorites"
+          : "Removed from Favorites",
+        "⭐"
+      );
     } catch (error) {
       console.error(
         "Favorite error:",
         error
       );
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "Failed to update favorite",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // MOVE TO TRASH
   // --------------------------------------------------
 
-  const moveToTrash = async (emailId) => {
+  const moveToTrash = async (
+    emailId
+  ) => {
     try {
       const response = await fetch(
         `${API_URL}/api/emails/${emailId}/trash`,
         {
           method: "PATCH",
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -586,44 +831,53 @@ function App() {
         );
       }
 
-      setSelectedEmail(null);
-      setConversation([]);
+      clearConversation();
 
       await fetchEmails();
+      await fetchUnreadCount();
 
       showToast(
         "Email moved to Trash",
         "🗑️"
       );
-
     } catch (error) {
       console.error(
         "Trash error:",
         error
       );
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "Failed to move email to trash",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // MOVE TO SPAM
   // --------------------------------------------------
 
-  const moveToSpam = async (emailId) => {
+  const moveToSpam = async (
+    emailId
+  ) => {
     try {
       const response = await fetch(
         `${API_URL}/api/emails/${emailId}/spam`,
         {
           method: "PATCH",
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -632,44 +886,53 @@ function App() {
         );
       }
 
-      setSelectedEmail(null);
-      setConversation([]);
+      clearConversation();
 
       await fetchEmails();
+      await fetchUnreadCount();
 
       showToast(
         "Email moved to Spam",
         "🚫"
       );
-
     } catch (error) {
       console.error(
         "Spam error:",
         error
       );
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "Failed to move email to spam",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // RESTORE EMAIL
   // --------------------------------------------------
 
-  const restoreEmail = async (emailId) => {
+  const restoreEmail = async (
+    emailId
+  ) => {
     try {
       const response = await fetch(
         `${API_URL}/api/emails/${emailId}/restore`,
         {
           method: "PATCH",
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -678,44 +941,62 @@ function App() {
         );
       }
 
-      setSelectedEmail(null);
-      setConversation([]);
+      clearConversation();
 
       await fetchEmails();
+      await fetchUnreadCount();
 
       showToast(
         "Email restored successfully",
         "♻️"
       );
-
     } catch (error) {
       console.error(
         "Restore error:",
         error
       );
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "Failed to restore email",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // PERMANENT DELETE
   // --------------------------------------------------
 
-  const deletePermanently = async (emailId) => {
+  const deletePermanently = async (
+    emailId
+  ) => {
+    const confirmed =
+      window.confirm(
+        "Delete this email permanently?"
+      );
+
+    if (!confirmed) {
+      return;
+    }
+
     try {
       const response = await fetch(
         `${API_URL}/api/emails/${emailId}`,
         {
           method: "DELETE",
           headers: {
-            Authorization: `Bearer ${token}`
-          }
+            Authorization: `Bearer ${token}`,
+          },
         }
       );
 
       const data = await response.json();
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -724,26 +1005,28 @@ function App() {
         );
       }
 
-      setSelectedEmail(null);
-      setConversation([]);
+      clearConversation();
 
       await fetchEmails();
+      await fetchUnreadCount();
 
       showToast(
         "Email permanently deleted",
         "❌"
       );
-
     } catch (error) {
       console.error(
         "Delete error:",
         error
       );
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "Failed to delete email",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // SAVE DRAFT
@@ -751,39 +1034,62 @@ function App() {
 
   const saveDraft = async () => {
     if (
-      !recipient &&
-      !subject &&
-      !body
+      !recipient.trim() &&
+      !subject.trim() &&
+      !body.trim()
     ) {
-      setShowCompose(false);
+      resetCompose();
+      return;
+    }
+
+    /*
+      IMPORTANT:
+      The current backend does not have a
+      PATCH /drafts/:id endpoint.
+
+      Therefore, when editing an existing draft,
+      we don't create another duplicate draft.
+      The existing draft remains unchanged until
+      the user sends it.
+    */
+
+    if (editingDraft) {
+      resetCompose();
+
+      showToast(
+        "Draft closed. Changes were not saved.",
+        "!"
+      );
+
       return;
     }
 
     try {
+      const recipients =
+        parseRecipients(recipient);
+
       const response = await fetch(
         `${API_URL}/api/emails/drafts`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`
+            Authorization: `Bearer ${token}`,
           },
           body: JSON.stringify({
-            recipients: recipient
-              ? [recipient]
-              : [],
+            recipients,
             subject,
-            body
-          })
+            body,
+          }),
         }
       );
 
       const data = await response.json();
 
-      console.log(
-        "SAVE DRAFT RESPONSE:",
-        data
-      );
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
 
       if (!response.ok) {
         throw new Error(
@@ -792,30 +1098,65 @@ function App() {
         );
       }
 
-      setShowCompose(false);
+      resetCompose();
 
+      if (view === "draft") {
+        await fetchEmails("draft");
+      }
+
+      showToast(
+        "Draft saved",
+        "📝"
+      );
     } catch (error) {
       console.error(
         "Save draft error:",
         error
       );
 
-      alert(error.message);
+      showToast(
+        error.message ||
+        "Failed to save draft",
+        "!"
+      );
     }
   };
-
 
   // --------------------------------------------------
   // SEND EMAIL
   // --------------------------------------------------
 
   const sendEmail = async () => {
+    const recipients =
+      parseRecipients(recipient);
+
+    if (recipients.length === 0) {
+      setError(
+        "At least one recipient is required"
+      );
+
+      return;
+    }
+
+    if (!body.trim()) {
+      setError(
+        "Message is required"
+      );
+
+      return;
+    }
+
+    /*
+      Prevent sending to yourself.
+    */
     if (
-      !recipient ||
-      !body.trim()
+      recipients.some(
+        (number) =>
+          number === user.phoneNumber
+      )
     ) {
       setError(
-        "Recipient and message are required"
+        "You cannot send an email to yourself."
       );
 
       return;
@@ -825,85 +1166,68 @@ function App() {
     setError("");
 
     try {
+      let response;
 
-      // --------------------------------
-      // EDITING AN EXISTING DRAFT
-      // --------------------------------
-
+      // Existing draft
       if (editingDraft) {
-        const response = await fetch(
+        response = await fetch(
           `${API_URL}/api/emails/${editingDraft._id}/send`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`
+              Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
-              recipients: [recipient],
+              recipients,
               subject,
-              body
-            })
+              body,
+            }),
           }
         );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-            "Failed to send draft"
-          );
-        }
       }
 
-      // --------------------------------
-      // NORMAL NEW EMAIL
-      // --------------------------------
-
+      // New email
       else {
-        const response = await fetch(
+        response = await fetch(
           `${API_URL}/api/emails`,
           {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`
+              Authorization: `Bearer ${token}`,
             },
             body: JSON.stringify({
-              recipients: [recipient],
+              recipients,
               subject,
-              body
-            })
+              body,
+            }),
           }
         );
-
-        const data = await response.json();
-
-        if (!response.ok) {
-          throw new Error(
-            data.message ||
-            "Failed to send email"
-          );
-        }
       }
 
-      // --------------------------------
-      // RESET COMPOSE
-      // --------------------------------
+      const data = await response.json();
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+          "Failed to send email"
+        );
+      }
 
       const wasEditingDraft =
         Boolean(editingDraft);
 
-      setRecipient("");
-      setSubject("");
-      setBody("");
-      setEditingDraft(null);
-      setShowCompose(false);
+      resetCompose();
 
       setView("sent");
 
-      await fetchEmails();
+      await fetchEmails("sent");
 
       showToast(
         wasEditingDraft
@@ -911,7 +1235,6 @@ function App() {
           : "Email sent successfully",
         "📤"
       );
-
     } catch (error) {
       console.error(
         "Send email error:",
@@ -923,11 +1246,90 @@ function App() {
         "Failed to send email"
       );
 
+      showToast(
+        error.message ||
+        "Failed to send email",
+        "!"
+      );
     } finally {
       setLoading(false);
     }
   };
 
+  // --------------------------------------------------
+  // UPDATE PROFILE
+  // --------------------------------------------------
+
+  const updateProfile = async (
+    name
+  ) => {
+    if (!name?.trim()) {
+      showToast(
+        "Name cannot be empty.",
+        "!"
+      );
+
+      return;
+    }
+
+    try {
+      const response = await fetch(
+        `${API_URL}/api/users/me`,
+        {
+          method: "PATCH",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+          }),
+        }
+      );
+
+      const data = await response.json();
+
+      if (response.status === 401) {
+        handleAuthError();
+        return;
+      }
+
+      if (!response.ok) {
+        throw new Error(
+          data.message ||
+          "Failed to update profile"
+        );
+      }
+
+      const updatedUser = {
+        ...user,
+        name: data.user.name,
+      };
+
+      localStorage.setItem(
+        "user",
+        JSON.stringify(updatedUser)
+      );
+
+      setShowProfile(false);
+
+      showToast(
+        "Profile updated successfully",
+        "✓"
+      );
+    } catch (error) {
+      console.error(
+        "Profile update error:",
+        error
+      );
+
+      showToast(
+        error.message ||
+        "Failed to update profile",
+        "!"
+      );
+    }
+  };
 
   // --------------------------------------------------
   // LOGOUT
@@ -938,10 +1340,31 @@ function App() {
     localStorage.removeItem("user");
 
     setScreen(1);
+
     setPhoneNumber("");
     setOtp("");
-  };
 
+    setEmails([]);
+    setConversation([]);
+    setSelectedEmail(null);
+
+    resetCompose();
+
+    setUnreadCount(0);
+
+    setView("inbox");
+
+    setSearchPhone("");
+    setSearchedUser(null);
+
+    setReplyBody("");
+
+    setShowProfile(false);
+    setProfileName("");
+
+    setAccepted(false);
+    setError("");
+  };
 
   // --------------------------------------------------
   // AUTH SCREEN 1
@@ -950,7 +1373,6 @@ function App() {
   if (screen === 1) {
     return (
       <div className="page">
-
         <main className="container">
 
           <h1>
@@ -972,7 +1394,8 @@ function App() {
               <button
                 key={language.name}
                 className={
-                  `language ${selectedLanguage === language.name
+                  `language ${selectedLanguage ===
+                    language.name
                     ? "selected"
                     : ""
                   }`
@@ -983,7 +1406,6 @@ function App() {
                   )
                 }
               >
-
                 <span>
                   {language.name}
                 </span>
@@ -991,7 +1413,6 @@ function App() {
                 <span className="native">
                   {language.native}
                 </span>
-
               </button>
             ))}
 
@@ -1011,11 +1432,9 @@ function App() {
           </p>
 
         </main>
-
       </div>
     );
   }
-
 
   // --------------------------------------------------
   // AUTH SCREEN 2
@@ -1024,7 +1443,6 @@ function App() {
   if (screen === 2) {
     return (
       <div className="page">
-
         <main className="container">
 
           <h1>
@@ -1096,11 +1514,9 @@ function App() {
           </p>
 
         </main>
-
       </div>
     );
   }
-
 
   // --------------------------------------------------
   // AUTH SCREEN 3
@@ -1109,7 +1525,6 @@ function App() {
   if (screen === 3) {
     return (
       <div className="page">
-
         <main className="container">
 
           <h1>
@@ -1186,11 +1601,9 @@ function App() {
           </p>
 
         </main>
-
       </div>
     );
   }
-
 
   // --------------------------------------------------
   // AUTH SCREEN 4
@@ -1199,7 +1612,6 @@ function App() {
   if (screen === 4) {
     return (
       <div className="page">
-
         <main className="container">
 
           <h1>
@@ -1266,11 +1678,9 @@ function App() {
           </p>
 
         </main>
-
       </div>
     );
   }
-
 
   // --------------------------------------------------
   // HOME SCREEN
@@ -1301,7 +1711,6 @@ function App() {
               <button
                 className="toast-close"
                 onClick={() => {
-
                   clearTimeout(
                     toastTimers.current[
                     toast.id
@@ -1312,7 +1721,8 @@ function App() {
                     (currentToasts) =>
                       currentToasts.filter(
                         (item) =>
-                          item.id !== toast.id
+                          item.id !==
+                          toast.id
                       )
                   );
 
@@ -1330,7 +1740,6 @@ function App() {
         </div>
       )}
 
-
       {/* SIDEBAR */}
 
       <aside className="sidebar">
@@ -1342,14 +1751,13 @@ function App() {
         <button
           className="compose-button"
           onClick={() => {
-
             setEditingDraft(null);
             setRecipient("");
             setSubject("");
             setBody("");
-            setShowCompose(true);
             setError("");
 
+            setShowCompose(true);
           }}
         >
           + Compose
@@ -1367,7 +1775,7 @@ function App() {
             }
             onClick={() => {
               setView("inbox");
-              setSelectedEmail(null);
+              clearConversation();
             }}
           >
 
@@ -1387,7 +1795,6 @@ function App() {
 
           </button>
 
-
           {/* SENT */}
 
           <button
@@ -1398,12 +1805,11 @@ function App() {
             }
             onClick={() => {
               setView("sent");
-              setSelectedEmail(null);
+              clearConversation();
             }}
           >
             📤 Sent
           </button>
-
 
           {/* FAVORITES */}
 
@@ -1415,12 +1821,11 @@ function App() {
             }
             onClick={() => {
               setView("favorite");
-              setSelectedEmail(null);
+              clearConversation();
             }}
           >
             ⭐ Favorites
           </button>
-
 
           {/* DRAFTS */}
 
@@ -1431,16 +1836,12 @@ function App() {
                 : "nav-item"
             }
             onClick={() => {
-
               setView("draft");
-              setSelectedEmail(null);
-              fetchDrafts();
-
+              clearConversation();
             }}
           >
             📝 Drafts
           </button>
-
 
           {/* SPAM */}
 
@@ -1452,12 +1853,11 @@ function App() {
             }
             onClick={() => {
               setView("spam");
-              setSelectedEmail(null);
+              clearConversation();
             }}
           >
             🚫 Spam
           </button>
-
 
           {/* TRASH */}
 
@@ -1469,7 +1869,7 @@ function App() {
             }
             onClick={() => {
               setView("trash");
-              setSelectedEmail(null);
+              clearConversation();
             }}
           >
             🗑 Trash
@@ -1477,12 +1877,20 @@ function App() {
 
         </nav>
 
-
         {/* SIDEBAR BOTTOM */}
 
         <div className="sidebar-bottom">
 
-          <div className="profile-mini">
+          <button
+            className="profile-mini"
+            onClick={() => {
+              setProfileName(
+                user.name || ""
+              );
+
+              setShowProfile(true);
+            }}
+          >
 
             <div className="avatar">
               {user.phoneNumber?.slice(-2) ||
@@ -1492,7 +1900,8 @@ function App() {
             <div>
 
               <strong>
-                {user.phoneNumber}
+                {user.name ||
+                  user.phoneNumber}
               </strong>
 
               <span>
@@ -1501,7 +1910,7 @@ function App() {
 
             </div>
 
-          </div>
+          </button>
 
           <button
             className="logout-button"
@@ -1513,7 +1922,6 @@ function App() {
         </div>
 
       </aside>
-
 
       {/* MAIN CONTENT */}
 
@@ -1554,7 +1962,6 @@ function App() {
 
           </div>
 
-
           {/* SEARCH */}
 
           <div className="search-container">
@@ -1564,7 +1971,6 @@ function App() {
               placeholder="Search phone number..."
               value={searchPhone}
               onChange={(e) => {
-
                 setSearchPhone(
                   e.target.value.replace(
                     /\D/g,
@@ -1573,9 +1979,13 @@ function App() {
                 );
 
                 setSearchedUser(null);
-
               }}
               maxLength="10"
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  searchUser();
+                }
+              }}
             />
 
             <button
@@ -1588,15 +1998,15 @@ function App() {
 
         </header>
 
-
         {/* FILTER BAR */}
 
         <div className="filter-bar">
 
           <button
-            onClick={() =>
-              setView("inbox")
-            }
+            onClick={() => {
+              setView("inbox");
+              clearConversation();
+            }}
             className={
               view === "inbox"
                 ? "filter active"
@@ -1606,15 +2016,10 @@ function App() {
             All
           </button>
 
-
-          {/* IMPORTANT:
-              This is a FILTER, not a sidebar nav item.
-          */}
-
           <button
             onClick={() => {
               setView("unread");
-              setSelectedEmail(null);
+              clearConversation();
             }}
             className={
               view === "unread"
@@ -1627,14 +2032,15 @@ function App() {
 
         </div>
 
-
         {/* SEARCH RESULT */}
 
         {searchedUser && (
           <div className="user-result">
 
             <div className="avatar large">
-              {searchedUser.phoneNumber.slice(-2)}
+              {searchedUser.phoneNumber.slice(
+                -2
+              )}
             </div>
 
             <div>
@@ -1667,7 +2073,6 @@ function App() {
           </div>
         )}
 
-
         {/* ERROR */}
 
         {error && (
@@ -1675,7 +2080,6 @@ function App() {
             {error}
           </p>
         )}
-
 
         {/* EMAIL LIST */}
 
@@ -1700,9 +2104,13 @@ function App() {
                 </p>
 
                 <button
-                  onClick={() =>
-                    setShowCompose(true)
-                  }
+                  onClick={() => {
+                    setEditingDraft(null);
+                    setRecipient("");
+                    setSubject("");
+                    setBody("");
+                    setShowCompose(true);
+                  }}
                 >
                   Compose your first email
                 </button>
@@ -1722,18 +2130,19 @@ function App() {
                   }
                   key={email._id}
                   onClick={() => {
-
                     if (view === "draft") {
                       openDraft(email);
                     } else {
                       openConversation(email);
                     }
-
                   }}
                 >
 
                   <div className="email-avatar">
-                    {email.sender?.slice(-2)}
+                    {(
+                      email.sender ||
+                      "PM"
+                    ).slice(-2)}
                   </div>
 
                   <div className="email-content">
@@ -1746,21 +2155,19 @@ function App() {
                           user.phoneNumber
                           ? `To: ${email.recipients?.join(
                             ", "
-                          )}`
+                          ) || ""
+                          }`
                           : email.sender}
 
                       </strong>
 
                       <span>
-
                         {new Date(
                           email.createdAt
                         ).toLocaleDateString()}
-
                       </span>
 
                     </div>
-
 
                     <h3
                       className={
@@ -1773,7 +2180,6 @@ function App() {
                         "(No subject)"}
                     </h3>
 
-
                     <p>
                       {email.body?.slice(
                         0,
@@ -1783,19 +2189,16 @@ function App() {
 
                   </div>
 
-
                   {/* FAVORITE */}
 
                   <span
                     className="favorite-star"
                     onClick={(e) => {
-
                       e.stopPropagation();
 
                       toggleFavorite(
                         email._id
                       );
-
                     }}
                   >
                     {email.isFavorite
@@ -1812,7 +2215,6 @@ function App() {
           </section>
         )}
 
-
         {/* EMAIL VIEW */}
 
         {selectedEmail && (
@@ -1822,13 +2224,11 @@ function App() {
             <button
               className="back-button"
               onClick={() => {
-                setSelectedEmail(null);
-                setConversation([]);
+                clearConversation();
               }}
             >
               ← Back
             </button>
-
 
             {/* EMAIL ACTIONS */}
 
@@ -1836,9 +2236,7 @@ function App() {
 
               {view !== "trash" &&
                 view !== "spam" && (
-
                   <>
-
                     <button
                       onClick={() =>
                         moveToTrash(
@@ -1858,11 +2256,8 @@ function App() {
                     >
                       🚫 Spam
                     </button>
-
                   </>
-
                 )}
-
 
               {(view === "trash" ||
                 view === "spam") && (
@@ -1878,7 +2273,6 @@ function App() {
                   </button>
 
                 )}
-
 
               {view === "trash" && (
 
@@ -1896,20 +2290,12 @@ function App() {
 
             </div>
 
-
             {/* SUBJECT */}
 
             <h1>
               {selectedEmail.subject ||
                 "(No subject)"}
             </h1>
-
-
-            <p>
-              Email ID:{" "}
-              {selectedEmail._id}
-            </p>
-
 
             {/* CONVERSATION */}
 
@@ -1930,28 +2316,22 @@ function App() {
                   <div className="message-header">
 
                     <strong>
-
                       {email.sender ===
                         user.phoneNumber
                         ? "You"
                         : email.sender}
-
                     </strong>
 
                   </div>
-
 
                   <p>
                     {email.body}
                   </p>
 
-
                   <small>
-
                     {new Date(
                       email.createdAt
                     ).toLocaleString()}
-
                   </small>
 
                 </div>
@@ -1960,41 +2340,48 @@ function App() {
 
             </div>
 
-
             {/* REPLY */}
 
-            <div className="reply-box">
+            {conversation.some(
+              (message) =>
+                !message.hasReplied &&
+                message.sender !==
+                user.phoneNumber
+            ) && (
 
-              <textarea
-                placeholder="Write a reply..."
-                value={replyBody}
-                onChange={(e) =>
-                  setReplyBody(
-                    e.target.value
-                  )
-                }
-              />
+                <div className="reply-box">
 
-              <button
-                onClick={sendReply}
-                disabled={
-                  replyLoading ||
-                  !replyBody.trim()
-                }
-              >
-                {replyLoading
-                  ? "Sending..."
-                  : "Send"}
-              </button>
+                  <textarea
+                    placeholder="Write a reply..."
+                    value={replyBody}
+                    onChange={(e) =>
+                      setReplyBody(
+                        e.target.value
+                      )
+                    }
+                  />
 
-            </div>
+                  <button
+                    onClick={sendReply}
+                    disabled={
+                      replyLoading ||
+                      !replyBody.trim()
+                    }
+                  >
+                    {replyLoading
+                      ? "Sending..."
+                      : "Send"}
+                  </button>
+
+                </div>
+
+              )}
 
           </section>
 
         )}
 
       </main>
-
 
       {/* COMPOSE MODAL */}
 
@@ -2020,25 +2407,29 @@ function App() {
 
             </div>
 
-
             <label>
               To
             </label>
 
             <input
-              type="tel"
-              placeholder="Phone number"
+              type="text"
+              placeholder="Phone number(s), separated by commas"
               value={recipient}
               onChange={(e) =>
                 setRecipient(
                   e.target.value.replace(
-                    /\D/g,
+                    /[^\d,\s]/g,
                     ""
                   )
                 )
               }
             />
 
+            <small>
+              Multiple recipients:
+              {" "}
+              9876543210, 9123456789
+            </small>
 
             <label>
               Subject
@@ -2055,7 +2446,6 @@ function App() {
               }
             />
 
-
             <label>
               Message
             </label>
@@ -2070,15 +2460,101 @@ function App() {
               }
             />
 
-
             <button
               className="send-button"
               onClick={sendEmail}
-              disabled={loading}
+              disabled={
+                loading ||
+                !recipient.trim() ||
+                !body.trim()
+              }
             >
               {loading
                 ? "Sending..."
                 : "Send Email"}
+            </button>
+
+          </div>
+
+        </div>
+
+      )}
+
+      {/* PROFILE MODAL */}
+
+      {showProfile && (
+
+        <div
+          className="modal-overlay"
+          onClick={() =>
+            setShowProfile(false)
+          }
+        >
+
+          <div
+            className="compose-modal"
+            onClick={(e) =>
+              e.stopPropagation()
+            }
+          >
+
+            <div className="compose-header">
+
+              <h2>
+                Profile
+              </h2>
+
+              <button
+                onClick={() =>
+                  setShowProfile(false)
+                }
+              >
+                ✕
+              </button>
+
+            </div>
+
+            <div className="profile-details">
+
+              <div className="avatar large">
+                {user.phoneNumber?.slice(-2) ||
+                  "PM"}
+              </div>
+
+              <strong>
+                {user.emailId}
+              </strong>
+
+              <span>
+                +91 {user.phoneNumber}
+              </span>
+
+            </div>
+
+            <label>
+              Name
+            </label>
+
+            <input
+              type="text"
+              placeholder="Enter your name"
+              value={profileName}
+              onChange={(e) =>
+                setProfileName(
+                  e.target.value
+                )
+              }
+            />
+
+            <button
+              className="send-button"
+              onClick={() =>
+                updateProfile(
+                  profileName
+                )
+              }
+            >
+              Save Profile
             </button>
 
           </div>

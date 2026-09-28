@@ -1,5 +1,10 @@
 const User = require("../models/User");
 
+
+// ==========================================
+// GET MY PROFILE
+// ==========================================
+
 const getMe = async (req, res) => {
   try {
     const user = await User.findById(req.user.userId);
@@ -10,7 +15,9 @@ const getMe = async (req, res) => {
       });
     }
 
-    res.status(200).json({ user });
+    res.status(200).json({
+      user
+    });
 
   } catch (error) {
     console.error("Get user error:", error);
@@ -20,6 +27,11 @@ const getMe = async (req, res) => {
     });
   }
 };
+
+
+// ==========================================
+// UPDATE MY PROFILE
+// ==========================================
 
 const updateMe = async (req, res) => {
   try {
@@ -33,7 +45,9 @@ const updateMe = async (req, res) => {
 
     const user = await User.findByIdAndUpdate(
       req.user.userId,
-      { name },
+      {
+        name: name.trim()
+      },
       {
         new: true,
         runValidators: true
@@ -61,13 +75,32 @@ const updateMe = async (req, res) => {
 };
 
 
+// ==========================================
+// SEARCH USER
+// ==========================================
+
 const searchUser = async (req, res) => {
   try {
-    const { phoneNumber } = req.query;
+    let { phoneNumber } = req.query;
 
     if (!phoneNumber) {
       return res.status(400).json({
         message: "Phone number is required"
+      });
+    }
+
+    // Remove spaces and common formatting
+    phoneNumber = phoneNumber.replace(/\D/g, "");
+
+    // If user enters +91XXXXXXXXXX,
+    // this converts it to XXXXXXXXXX
+    if (phoneNumber.length === 12 && phoneNumber.startsWith("91")) {
+      phoneNumber = phoneNumber.slice(2);
+    }
+
+    if (phoneNumber.length !== 10) {
+      return res.status(400).json({
+        message: "Enter a valid 10-digit phone number"
       });
     }
 
@@ -101,8 +134,6 @@ const searchUser = async (req, res) => {
     });
   }
 };
-
-
 
 
 module.exports = { getMe, updateMe, searchUser };

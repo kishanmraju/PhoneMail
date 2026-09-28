@@ -10,12 +10,17 @@ const protect = (req, res, next) => {
       });
     }
 
-    //? why? CUZ BEARER zxncio3789aHFUhsiad, split and get the second part
+    if (!authHeader.startsWith("Bearer ")) {
+      return res.status(401).json({
+        message: "Invalid authentication format"
+      });
+    }
+
     const token = authHeader.split(" ")[1];
 
     if (!token) {
       return res.status(401).json({
-        message: "Invalid authentication format"
+        message: "Invalid authentication token"
       });
     }
 
@@ -29,8 +34,14 @@ const protect = (req, res, next) => {
     next();
 
   } catch (error) {
+    if (error.name === "TokenExpiredError") {
+      return res.status(401).json({
+        message: "Authentication token has expired"
+      });
+    }
+
     return res.status(401).json({
-      message: "Invalid or expired token"
+      message: "Invalid authentication token"
     });
   }
 };

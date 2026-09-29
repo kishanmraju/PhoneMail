@@ -103,7 +103,7 @@ function App() {
 
         exposeMethods: true,
 
-        captchaRenderId: "",
+        // captchaRenderId: "",
 
         success: (data) => {
           console.log(

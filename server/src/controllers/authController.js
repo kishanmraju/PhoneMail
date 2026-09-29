@@ -1,4 +1,3 @@
-const OTP = require("../models/OTP");
 const User = require("../models/User");
 const jwt = require("jsonwebtoken");
 
@@ -12,10 +11,16 @@ const normalizePhoneNumber = (phoneNumber) => {
     return null;
   }
 
-  let phone = phoneNumber.replace(/\D/g, "");
+  let phone = String(phoneNumber).replace(
+    /\D/g,
+    ""
+  );
 
-  // Convert +91XXXXXXXXXX → XXXXXXXXXX
-  if (phone.length === 12 && phone.startsWith("91")) {
+  // Convert 91XXXXXXXXXX -> XXXXXXXXXX
+  if (
+    phone.length === 12 &&
+    phone.startsWith("91")
+  ) {
     phone = phone.slice(2);
   }
 
@@ -29,176 +34,155 @@ const normalizePhoneNumber = (phoneNumber) => {
 
 
 // ==========================================
-// SEND OTP
+// VERIFY MSG91 ACCESS TOKEN
 // ==========================================
 
-const sendOTP = async (req, res) => {
+const verifyMsg91Token = async (
+  req,
+  res
+) => {
   try {
-    const phoneNumber = normalizePhoneNumber(
-      req.body.phoneNumber
-    );
+    const phoneNumber =
+      normalizePhoneNumber(
+        req.body.phoneNumber
+      );
+
+    const accessToken =
+      String(
+        req.body.accessToken || ""
+      ).trim();
+
+
+    // ======================================
+    // VALIDATION
+    // ======================================
 
     if (!phoneNumber) {
       return res.status(400).json({
-        message: "Enter a valid 10-digit phone number"
+        message:
+          "Valid phone number is required"
       });
     }
 
-
-    // Delete previous OTPs for this number
-    await OTP.deleteMany({
-      phoneNumber
-    });
-
-
-    // Generate 6-digit OTP
-    const otp = Math.floor(
-      100000 + Math.random() * 900000
-    ).toString();
-
-
-    // OTP expires in 5 minutes
-    const expiresAt = new Date(
-      Date.now() + 5 * 60 * 1000
-    );
-
-
-    await OTP.create({
-      phoneNumber,
-      otp,
-      expiresAt
-    });
-
-
-    // TEMPORARY FOR DEVELOPMENT
-    console.log(
-      `OTP for ${phoneNumber}: ${otp}`
-    );
-
-
-    res.status(200).json({
-      message: "OTP sent successfully"
-    });
-
-  } catch (error) {
-    console.error(
-      "Send OTP error:",
-      error
-    );
-
-    res.status(500).json({
-      message: "Failed to send OTP"
-    });
-  }
-};
-
-
-// ==========================================
-// VERIFY OTP
-// ==========================================
-
-const verifyOTP = async (req, res) => {
-  try {
-    const phoneNumber = normalizePhoneNumber(
-      req.body.phoneNumber
-    );
-
-    const { otp } = req.body;
-
-
-    if (!phoneNumber || !otp) {
+    if (!accessToken) {
       return res.status(400).json({
         message:
-          "Phone number and OTP are required"
+          "MSG91 access token is required"
       });
     }
 
+    if (!process.env.MSG91_AUTHKEY) {
+      console.error(
+        "MSG91_AUTHKEY is missing from server .env"
+      );
 
-    // Find latest OTP
-    const otpRecord = await OTP.findOne({
-      phoneNumber
-    }).sort({
-      createdAt: -1
-    });
-
-
-    if (!otpRecord) {
-      return res.status(400).json({
-        message: "OTP not found"
-      });
-    }
-
-
-    // Check expiry
-    if (
-      new Date() >
-      otpRecord.expiresAt
-    ) {
-
-      await OTP.deleteOne({
-        _id: otpRecord._id
-      });
-
-      return res.status(400).json({
-        message: "OTP has expired"
-      });
-    }
-
-
-    // Check OTP
-    if (otpRecord.otp !== otp) {
-    return res.status(400).json({
-        message: "Invalid OTP"
-    });
-}
-
-await OTP.deleteOne({
-    _id: otpRecord._id
-});
-
-
-    // ======================================
-    // OTP IS VALID
-    // ======================================
-
-    let user = await User.findOne({
-      phoneNumber
-    });
-
-
-    // Create account if first login
-    if (!user) {
-      user = await User.create({
-        phoneNumber,
-        emailId:
-          `${phoneNumber}@phonemail.com`
+      return res.status(500).json({
+        message:
+          "MSG91 is not configured on server"
       });
     }
 
 
     // ======================================
-    // DELETE USED OTP
+    // VERIFY TOKEN WITH MSG91
     // ======================================
 
-    await OTP.deleteOne({
-      _id: otpRecord._id
-    });
+    const response =
+      await fetch(
+        "https://control.msg91.com/api/v5/widget/verifyAccessToken",
+        {
+          method: "POST",
+
+          headers: {
+            "Content-Type":
+              "application/json",
+
+            Accept:
+              "application/json"
+          },
+
+          body: JSON.stringify({
+            authkey:
+              process.env.MSG91_AUTHKEY,
+
+            "access-token":
+              accessToken
+          })
+        }
+      );
 
 
-    // ======================================
-    // CREATE JWT
-    // ======================================
+    const data =
+      await response.json();
 
-    const token = jwt.sign(
-      {
-        userId: user._id,
-        phoneNumber: user.phoneNumber
-      },
-      process.env.JWT_SECRET,
-      {
-        expiresIn: "7d"
-      }
+
+    console.log(
+      "MSG91 access token verification:",
+      data
     );
+
+
+    // ======================================
+    // MSG91 REJECTED TOKEN
+    // ======================================
+
+    if (
+      !response.ok ||
+      data?.type === "error"
+    ) {
+      return res.status(401).json({
+        message:
+          data?.message ||
+          "MSG91 access token verification failed"
+      });
+    }
+
+
+    // ======================================
+    // FIND USER
+    // ======================================
+
+    let user =
+      await User.findOne({
+        phoneNumber
+      });
+
+
+    // ======================================
+    // CREATE ACCOUNT IF NEW
+    // ======================================
+
+    if (!user) {
+      user =
+        await User.create({
+          phoneNumber,
+
+          emailId:
+            `${phoneNumber}@phonemail.com`
+        });
+    }
+
+
+    // ======================================
+    // CREATE PHONEMAIL JWT
+    // ======================================
+
+    const token =
+      jwt.sign(
+        {
+          userId:
+            user._id,
+
+          phoneNumber:
+            user.phoneNumber
+        },
+
+        process.env.JWT_SECRET,
+
+        {
+          expiresIn: "7d"
+        }
+      );
 
 
     // ======================================
@@ -206,35 +190,46 @@ await OTP.deleteOne({
     // ======================================
 
     return res.status(200).json({
+
       message:
         "OTP verified successfully",
 
       token,
 
       user: {
-        id: user._id,
+
+        id:
+          user._id,
+
         phoneNumber:
           user.phoneNumber,
+
         emailId:
           user.emailId,
+
         name:
           user.name || "",
+
         profilePicture:
           user.profilePicture || ""
       }
     });
 
   } catch (error) {
+
     console.error(
-      "Verify OTP error:",
+      "MSG91 verification error:",
       error
     );
 
-    res.status(500).json({
-      message: "Failed to verify OTP"
+    return res.status(500).json({
+      message:
+        "Failed to verify MSG91 access token"
     });
   }
 };
 
 
-module.exports = { sendOTP, verifyOTP };
+module.exports = {
+  verifyMsg91Token
+};

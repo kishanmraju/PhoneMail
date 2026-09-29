@@ -136,7 +136,7 @@ io.on("connection", (socket) => {
 ========================================== */
 
 const PORT =
-  process.env.PORT || 5000;
+  process.env.PORT || 5001;
 
 httpServer.listen(
   PORT,

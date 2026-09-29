@@ -1,7 +1,475 @@
 # PhoneMail
 
-PhoneMail is an email application where phone numbers act as email IDs.
+PhoneMail is a phone-number-based email application that allows users to use their phone number as their email identity.
+
+A PhoneMail address follows this format:
+
+`9876543210@phonemail.com`
+
+## Features
+
+### Phone Number Based Email ID
+Users do not need to create a traditional email username. Their PhoneMail address is generated using their verified phone number.
+
+### OTP Authentication
+PhoneMail uses phone number verification during account creation.
+
+```text
+Phone Number
+     ↓
+Send OTP
+     ↓
+Verify OTP
+     ↓
+Create / Login Account
+     ↓
+PhoneMail Account
+```
+
+### Mobile Onboarding
+The mobile application follows a four-step onboarding flow:
+
+1. Language Selection
+2. Terms & Conditions
+3. Phone Number Verification
+4. OTP Verification
+
+### Conversation-Based Email
+The mobile interface is designed around conversations. Emails from the same sender can be grouped into a conversation, with replies linked to the original message.
+
+### Web Client
+The web client is designed separately from the mobile experience and follows a traditional email-client layout.
+
+---
+
+# Tech Stack
+
+## Frontend
+- React
+- Vite
+- JavaScript
+- CSS
+
+## Backend
+- Node.js
+- Express.js
+- MongoDB
+- Mongoose
+- JWT
+- Nodemon
+
+## Database
+- MongoDB
+
+---
+
+# Project Structure
+
+```text
+PhoneMail/
+│
+├── client/
+│   ├── src/
+│   │   ├── App.jsx
+│   │   ├── App.css
+│   │   ├── index.css
+│   │   └── main.jsx
+│   ├── package.json
+│   └── ...
+│
+├── server/
+│   ├── src/
+│   │   └── server.js
+│   ├── .env
+│   ├── package.json
+│   └── ...
+│
+├── mobile/
+│
+└── README.md
+```
+
+---
+
+# Getting Started
+
+## Prerequisites
+
+- Node.js
+- npm
+- MongoDB
+
+## Backend Setup
+
+```bash
+cd PhoneMail/server
+npm install
+```
+
+Create a `.env` file inside `server`:
+
+```env
+PORT=5000
+MONGO_URI=mongodb://localhost:27017/phonemail
+```
+
+Do not commit `.env` or other sensitive credentials to GitHub.
+
+## Start MongoDB
+
+If MongoDB was installed using Homebrew:
+
+```bash
+brew services start mongodb-community
+```
+
+Check the service:
+
+```bash
+brew services list
+```
+
+MongoDB should be available at:
+
+```text
+mongodb://localhost:27017
+```
+
+## Start the Backend
+
+```bash
+npm run dev
+```
+
+Backend:
+
+```text
+http://localhost:5000
+```
+
+Expected output:
+
+```text
+Server running on http://localhost:5000
+MongoDB connected successfully
+```
+
+## Frontend Setup
+
+Open a second terminal:
+
+```bash
+cd PhoneMail/client
+npm install
+npm run dev
+```
+
+Vite will normally provide:
+
+```text
+http://localhost:5173
+```
+
+---
+
+# Authentication API
+
+## Send OTP
+
+### Endpoint
+
+```http
+POST /api/auth/send-otp
+```
+
+### Request
+
+```json
+{
+  "phoneNumber": "9876543210"
+}
+```
+
+During development, the generated OTP is printed in the backend terminal.
+
+## Verify OTP
+
+### Endpoint
+
+```http
+POST /api/auth/verify-otp
+```
+
+### Request
+
+```json
+{
+  "phoneNumber": "9876543210",
+  "otp": "123456"
+}
+```
+
+After successful verification, the backend authenticates the user and returns account information.
+
+Example PhoneMail ID:
+
+```text
+9876543210@phonemail.com
+```
+
+---
+
+# Authentication Flow
+
+```text
+                 ┌─────────────────┐
+                 │  PhoneMail App   │
+                 └────────┬────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │ Phone Number    │
+                 └────────┬────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │   Send OTP      │
+                 └────────┬────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │ Node / Express  │
+                 └────────┬────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │    MongoDB      │
+                 └─────────────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │   Enter OTP     │
+                 └────────┬────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │  Verify OTP     │
+                 └────────┬────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │ PhoneMail ID    │
+                 │ Generated       │
+                 └─────────────────┘
+```
+
+---
+
+# Mobile Onboarding
+
+The mobile onboarding consists of four screens.
+
+### Screen 1 — Language Selection
+The user selects their preferred language.
+
+Current frontend options:
+- English
+- Tamil
+- Hindi
+- Telugu
+- Kannada
+
+### Screen 2 — Terms & Conditions
+The user reviews and accepts the Terms & Conditions.
+
+### Screen 3 — Phone Number Verification
+The user enters their phone number.
+
+```text
++91 9876543210
+```
+
+The frontend sends the number to:
+
+```http
+POST /api/auth/send-otp
+```
+
+### Screen 4 — OTP Verification
+The user enters the OTP generated by the backend.
+
+The frontend sends the OTP to:
+
+```http
+POST /api/auth/verify-otp
+```
+
+After successful verification, the user can enter the PhoneMail application.
+
+---
+
+# Mobile Interface
+
+The mobile interface is intended to follow a WhatsApp-style communication experience while retaining email functionality.
+
+The planned home screen includes:
+
+- Conversation list
+- Search
+- Filter chips
+- Compose
+- Profile
+- Settings
+- Menu
+
+There will not be separate Inbox and Sent sections in the primary mobile experience. Conversations are grouped together.
+
+---
+
+# Conversation Model
+
+The planned conversation behavior includes:
+
+- Messages from the same sender grouped together
+- Replies linked to the original email
+- Subject information maintained within conversations
+- Conversation-oriented message display
+
+---
+
+# Web Client
+
+The web client uses a different interface from the mobile application.
+
+The web client is planned to use a traditional email interface.
+
+The web authentication screen contains:
+
+- Phone number
+- OTP
+- Next button
+- Terms & Conditions information
+
+The web interface follows a Gmail-like layout rather than the mobile conversation-style layout.
+
+---
+
+# Current Development Status
+
+## Backend
+
+- [x] Node.js setup
+- [x] Express server
+- [x] MongoDB connection
+- [x] Environment configuration
+- [x] OTP generation
+- [x] Send OTP API
+- [x] OTP verification API
+- [x] User creation
+- [x] JWT authentication
+- [x] PhoneMail ID generation
+
+## Frontend
+
+- [x] React + Vite setup
+- [x] Mobile onboarding
+- [x] Language selection
+- [x] Terms & Conditions
+- [x] Phone number input
+- [x] OTP input
+- [x] Backend OTP integration
+- [x] OTP verification integration
+
+## Planned
+
+- [ ] Inbox / conversation list
+- [ ] Conversation view
+- [ ] Compose email
+- [ ] Send email
+- [ ] Receive email
+- [ ] Search
+- [ ] Filters
+- [ ] Profile
+- [ ] Settings
+- [ ] Web email client
+- [ ] Mobile application
+
+---
+
+# Development
+
+Run the backend and frontend in separate terminals.
+
+### Terminal 1
+
+```bash
+cd PhoneMail/server
+npm run dev
+```
+
+### Terminal 2
+
+```bash
+cd PhoneMail/client
+npm run dev
+```
+
+Make sure MongoDB is running before starting the backend.
+
+---
+
+# Environment
+
+Backend configuration:
+
+```env
+PORT=5000
+MONGO_URI=mongodb://localhost:27017/phonemail
+```
+
+Frontend communicates with:
+
+```text
+http://localhost:5000
+```
+
+---
+
+# Important
+
+The `.env` file contains environment-specific configuration and should not be committed to the repository.
+
+Add this to `.gitignore` if it is not already present:
+
+```gitignore
+node_modules/
+.env
+dist/
+```
+
+---
+
+# Hackathon Goal
+
+PhoneMail aims to simplify email communication by replacing traditional email addresses with phone-number-based identities.
 
 Example:
 
+```text
 9876543210@phonemail.com
+```
+
+The project combines:
+
+- Phone number identity
+- OTP authentication
+- Email functionality
+- Conversation-based communication
+- Mobile-first design
+- Traditional web email interface
+
+---
+
+# License
+
+This project is developed as a hackathon project.

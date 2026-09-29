@@ -310,7 +310,7 @@ After successful verification, the user can enter the PhoneMail application.
 
 # Mobile Interface
 
-The mobile interface is intended to follow a WhatsApp-style communication experience while retaining email functionality.
+The mobile interface is intended to follow a WhatsApp style communication experience while retaining email functionality.
 
 The planned home screen includes:
 
@@ -350,49 +350,7 @@ The web authentication screen contains:
 - Next button
 - Terms & Conditions information
 
-The web interface follows a Gmail-like layout rather than the mobile conversation-style layout.
-
----
-
-# Current Development Status
-
-## Backend
-
-- [x] Node.js setup
-- [x] Express server
-- [x] MongoDB connection
-- [x] Environment configuration
-- [x] OTP generation
-- [x] Send OTP API
-- [x] OTP verification API
-- [x] User creation
-- [x] JWT authentication
-- [x] PhoneMail ID generation
-
-## Frontend
-
-- [x] React + Vite setup
-- [x] Mobile onboarding
-- [x] Language selection
-- [x] Terms & Conditions
-- [x] Phone number input
-- [x] OTP input
-- [x] Backend OTP integration
-- [x] OTP verification integration
-
-## Planned
-
-- [ ] Inbox / conversation list
-- [ ] Conversation view
-- [ ] Compose email
-- [ ] Send email
-- [ ] Receive email
-- [ ] Search
-- [ ] Filters
-- [ ] Profile
-- [ ] Settings
-- [ ] Web email client
-- [ ] Mobile application
+The web interface follows a Gmail like layout rather than the mobile conversation style layout.
 
 ---
 
@@ -472,4 +430,4 @@ The project combines:
 
 # License
 
-This project is developed as a hackathon project.
+This project is developed as a buildathon project.

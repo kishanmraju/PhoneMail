@@ -1,1868 +1,267 @@
-@import url("https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap");
-
-/* =========================================================
-   GLOBAL
-========================================================= */
-
-:root {
-  --primary: #5741b0;
-  --primary-hover: #6148c7;
-  --primary-light: #eee9ff;
-  --border: #8d78e2;
-  --border-light: #e5defc;
-  --background: #f8f7fc;
-  --white: #ffffff;
-  --text: #171329;
-  --text-light: #77718d;
-  --danger: #ef476f;
-  --success: #4caf50;
-  --shadow: 0 8px 25px rgba(87, 65, 176, 0.08);
-  --sidebar-width: 300px;
-}
-
 * {
   box-sizing: border-box;
 }
 
-html,
-body,
-#root {
-  width: 100%;
-  height: 100%;
-  margin: 0;
-}
-
 body {
-  font-family: "Poppins", sans-serif;
-  background: var(--background);
-  color: var(--text);
+  margin: 0;
+  font-family: Arial, Helvetica, sans-serif;
+  background: #ffffff;
+  color: #202124;
 }
-
-button,
-input,
-textarea {
-  font-family: inherit;
-}
-
-button {
-  cursor: pointer;
-}
-
-button:disabled {
-  cursor: not-allowed;
-}
-
-/* =========================================================
-   AUTH / LOGIN PAGES
-========================================================= */
 
 .page {
-  width: 100%;
   min-height: 100vh;
   display: flex;
   justify-content: center;
-  align-items: center;
-  padding: 30px 20px;
-  background: var(--background);
 }
 
 .container {
   width: 100%;
-  max-width: 480px;
-  background: var(--white);
-  padding: 42px;
-  border: 1px solid var(--border-light);
-  border-radius: 24px;
-  box-shadow: var(--shadow);
+  max-width: 420px;
+  padding: 80px 24px 40px;
 }
 
-.container h1 {
-  margin: 0 0 30px;
-  color: var(--primary);
-  font-size: 34px;
-  font-weight: 700;
-  text-align: center;
+h1 {
+  margin: 0 0 60px;
+  font-size: 28px;
+  font-weight: 500;
+  color: #202124;
 }
 
-.container h2 {
+h2 {
   margin: 0 0 10px;
-  font-size: 25px;
-  font-weight: 600;
+  font-size: 28px;
+  font-weight: 400;
+  color: #202124;
 }
 
 .description {
   margin: 0 0 28px;
-  color: var(--text-light);
-  font-size: 14px;
-  line-height: 1.7;
+  font-size: 15px;
+  line-height: 1.5;
+  color: #5f6368;
 }
 
 .languages {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 8px;
+  margin-bottom: 28px;
 }
 
 .language {
   width: 100%;
-  min-height: 58px;
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: 0 18px;
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
-  background: var(--white);
-  color: var(--text);
-  transition: 0.2s ease;
+  justify-content: space-between;
+  padding: 14px 16px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #202124;
+  font-family: inherit;
+  font-size: 15px;
+  text-align: left;
+  cursor: pointer;
 }
 
 .language:hover {
-  border-color: var(--border);
-  background: #faf9ff;
+  background: #f8f9fa;
 }
 
 .language.selected {
-  border-color: var(--border);
-  background: var(--primary-light);
-  color: var(--primary);
-  font-weight: 600;
+  border-color: #1a73e8;
+  background: #f8fbff;
 }
 
-.language .native {
-  color: var(--text-light);
+.native {
+  color: #5f6368;
 }
-
-.continue-button {
-  width: 100%;
-  height: 52px;
-  margin-top: 24px;
-  border: none;
-  border-radius: 12px;
-  background: var(--primary);
-  color: var(--white);
-  font-size: 15px;
-  font-weight: 600;
-  transition: 0.2s ease;
-}
-
-.continue-button:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.continue-button:disabled {
-  opacity: 0.45;
-}
-
-.step {
-  margin: 18px 0 0;
-  text-align: center;
-  color: var(--text-light);
-  font-size: 12px;
-}
-
-/* =========================================================
-   TERMS
-========================================================= */
 
 .terms {
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 18px;
-  border: 1px solid var(--border-light);
-  border-radius: 12px;
-  background: #faf9ff;
-  color: var(--text-light);
-  font-size: 13px;
-  line-height: 1.7;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.terms p {
+  margin: 0 0 14px;
+  font-size: 14px;
+  line-height: 1.6;
+  color: #5f6368;
+}
+
+.terms p:last-child {
+  margin-bottom: 0;
 }
 
 .terms-check {
   display: flex;
   align-items: flex-start;
   gap: 10px;
-  margin-top: 20px;
-  color: var(--text);
-  font-size: 13px;
+  margin-bottom: 24px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #202124;
+  cursor: pointer;
 }
 
 .terms-check input {
-  margin-top: 3px;
-  accent-color: var(--primary);
+  width: 17px;
+  height: 17px;
+  margin: 0;
+  accent-color: #1a73e8;
+  cursor: pointer;
 }
-
-/* =========================================================
-   PHONE / OTP
-========================================================= */
 
 .input-label {
   display: block;
   margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 600;
+  font-size: 14px;
+  color: #202124;
 }
 
 .phone-input {
   display: flex;
-  align-items: center;
-  height: 52px;
+  width: 100%;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  background: #ffffff;
   overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--white);
+}
+
+.phone-input:focus-within {
+  border-color: #1a73e8;
 }
 
 .country-code {
-  height: 100%;
   display: flex;
   align-items: center;
-  padding: 0 15px;
-  border-right: 1px solid var(--border-light);
-  color: var(--primary);
-  font-weight: 600;
+  padding: 0 14px;
+  border-right: 1px solid #dadce0;
+  font-size: 15px;
+  color: #202124;
+  background: #f8f9fa;
 }
 
 .phone-input input {
-  flex: 1;
-  height: 100%;
-  min-width: 0;
-  padding: 0 14px;
+  width: 100%;
+  padding: 14px;
   border: none;
   outline: none;
-  font-size: 14px;
+  font-family: inherit;
+  font-size: 16px;
+  color: #202124;
+}
+
+.phone-input input::placeholder {
+  color: #80868b;
 }
 
 .input-hint {
-  margin: 8px 0 0;
-  color: var(--text-light);
-  font-size: 12px;
+  margin: 8px 0 28px;
+  font-size: 13px;
+  color: #80868b;
 }
 
 .otp-input {
   width: 100%;
-  height: 54px;
-  padding: 0 16px;
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  padding: 14px;
+  border: 1px solid #dadce0;
+  border-radius: 6px;
   outline: none;
+  font-family: inherit;
   font-size: 18px;
-  letter-spacing: 6px;
+  letter-spacing: 4px;
+  color: #202124;
 }
 
-.otp-input:focus,
-.phone-input:focus-within {
-  box-shadow: 0 0 0 3px rgba(141, 120, 226, 0.15);
+.otp-input:focus {
+  border-color: #1a73e8;
+}
+
+.otp-input::placeholder {
+  color: #80868b;
+  letter-spacing: 0;
 }
 
 .error-message {
-  margin: 10px 0 0;
-  color: var(--danger);
-  font-size: 12px;
+  margin: 10px 0 20px;
+  font-size: 14px;
+  color: #d93025;
 }
 
-/* =========================================================
-   MAIN APPLICATION LAYOUT
-========================================================= */
-
-.home-page {
+.continue-button {
   width: 100%;
-  height: 100vh;
-  display: flex;
-  overflow: hidden;
-  background: var(--background);
-}
-
-/* =========================================================
-   SIDEBAR
-========================================================= */
-
-.sidebar {
-  width: var(--sidebar-width);
-  height: 100vh;
-  flex: 0 0 var(--sidebar-width);
-  display: flex;
-  flex-direction: column;
-  padding: 28px 24px 22px;
-  border-right: 1px solid var(--border-light);
-  background: var(--white);
-  overflow: hidden;
-  z-index: 20;
-}
-
-.logo {
-  width: 100%;
-  height: 46px;
-  display: flex;
-  align-items: center;
-  margin-bottom: 20px;
-  font-size: 0;
-}
-
-/*
-  Logo placeholder.
-  This is intentionally an image-like logo mark.
-  Replace the background-image later with your actual logo.
-*/
-.logo::before {
-  content: "";
-  width: 42px;
-  height: 42px;
-  display: block;
-  border-radius: 12px;
-  background-color: var(--primary);
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%235741b0'/%3E%3Cpath d='M16 17h20c9 0 15 5 15 13s-6 13-15 13H27v9H16V17zm11 9v8h8c3 0 5-1 5-4s-2-4-5-4h-8z' fill='white'/%3E%3Ccircle cx='47' cy='48' r='5' fill='%23dcd3ff'/%3E%3C/svg%3E");
-  background-size: cover;
-  background-position: center;
-  background-repeat: no-repeat;
-}
-
-.compose-button {
-  width: 100%;
-  height: 56px;
-  flex-shrink: 0;
+  padding: 12px 20px;
   border: none;
-  border-radius: 12px;
-  background: var(--primary);
-  color: var(--white);
-  font-size: 17px;
-  font-weight: 600;
-  transition: 0.2s ease;
-}
-
-.compose-button:hover {
-  background: var(--primary-hover);
-  transform: translateY(-1px);
-}
-
-/* =========================================================
-   SIDEBAR NAV
-========================================================= */
-
-.sidebar-nav {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  margin-top: 22px;
-}
-
-.nav-item {
-  width: 100%;
-  min-height: 50px;
-  display: flex;
-  align-items: center;
-  padding: 0 18px;
-  border: none;
-  border-radius: 11px;
-  background: transparent;
-  color: #4e4960;
-  text-align: left;
+  border-radius: 4px;
+  background: #1a73e8;
+  color: #ffffff;
+  font-family: inherit;
   font-size: 15px;
   font-weight: 500;
-  transition: 0.2s ease;
+  cursor: pointer;
 }
 
-.nav-item:hover {
-  background: #f5f2ff;
-  color: var(--primary);
+.continue-button:hover:not(:disabled) {
+  background: #1765cc;
 }
 
-.nav-item.active {
-  background: var(--primary-light);
-  color: var(--primary);
-  font-weight: 600;
+.continue-button:disabled {
+  background: #dadce0;
+  color: #80868b;
+  cursor: not-allowed;
 }
 
-.nav-item-content {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.unread-badge {
-  min-width: 24px;
-  height: 24px;
-  padding: 0 6px;
-  display: inline-flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 999px;
-  background: var(--primary);
-  color: white;
-  font-size: 11px;
-  font-weight: 600;
-}
-
-/* =========================================================
-   SIDEBAR BOTTOM / PROFILE
-========================================================= */
-
-.sidebar-bottom {
-  margin-top: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.profile-mini {
-  width: 100%;
-  min-height: 78px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 11px 13px;
-  border: 1px solid var(--border-light);
-  border-radius: 16px;
-  background: linear-gradient(135deg, #faf9ff, #f3efff);
-  color: var(--text);
-  text-align: left;
-  transition: 0.2s ease;
-}
-
-.profile-mini:hover {
-  border-color: var(--border);
-  box-shadow: 0 5px 16px rgba(87, 65, 176, 0.08);
-}
-
-.profile-mini > div:last-child {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 3px;
-}
-
-.profile-mini strong {
-  overflow: hidden;
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 600;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.profile-mini span:not(.avatar) {
-  overflow: hidden;
-  color: var(--text-light);
-  font-size: 10px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.avatar {
-  width: 44px;
-  height: 44px;
-  flex: 0 0 44px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  background: var(--primary-light);
-  color: var(--primary);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.avatar.large {
-  width: 54px;
-  height: 54px;
-  flex-basis: 54px;
-  font-size: 15px;
-}
-
-.logout-button {
-  width: 100%;
-  height: 46px;
-  border: 1px solid var(--border);
-  border-radius: 11px;
-  background: var(--white);
-  color: var(--primary);
-  font-size: 14px;
-  font-weight: 500;
-  transition: 0.2s ease;
-}
-
-.logout-button:hover {
-  background: var(--primary-light);
-}
-
-/* =========================================================
-   MAIN CONTENT
-========================================================= */
-
-.home-main {
-  position: relative;
-  flex: 1;
-  min-width: 0;
-  height: 100vh;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 42px 64px 70px;
-  background: var(--background);
-  scrollbar-width: auto;
-  scrollbar-color: #b5a8ea transparent;
-}
-
-/* Chrome / Edge scrollbar */
-
-.home-main::-webkit-scrollbar {
-  width: 10px;
-}
-
-.home-main::-webkit-scrollbar-track {
-  background: transparent;
-}
-
-.home-main::-webkit-scrollbar-thumb {
-  background: #b5a8ea;
-  border-radius: 20px;
-  border: 2px solid var(--background);
-}
-
-.home-main::-webkit-scrollbar-thumb:hover {
-  background: var(--primary);
-}
-
-/* =========================================================
-   HEADER
-========================================================= */
-
-.home-header {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 30px;
-  margin-bottom: 28px;
-}
-
-.home-header h2 {
-  margin: 0;
-  font-size: 34px;
-  line-height: 1.2;
-  font-weight: 600;
-}
-
-.home-header p {
-  margin: 7px 0 0;
-  color: var(--text-light);
-  font-size: 13px;
-}
-
-/* =========================================================
-   SEARCH
-========================================================= */
-
-.search-container {
-  width: min(480px, 45%);
-  min-width: 300px;
-  height: 52px;
-  display: flex;
-  overflow: hidden;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--white);
-}
-
-.search-container input {
-  flex: 1;
-  min-width: 0;
-  height: 100%;
-  padding: 0 16px;
-  border: none;
-  outline: none;
-  color: var(--text);
-  font-size: 13px;
-}
-
-.search-container input::placeholder {
-  color: #aaa4bb;
-}
-
-.search-container button {
-  width: 120px;
-  border: none;
-  background: var(--primary);
-  color: white;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.search-container button:hover {
-  background: var(--primary-hover);
-}
-
-/* =========================================================
-   FILTERS
-========================================================= */
-
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 24px;
-}
-
-.filter {
-  height: 44px;
-  min-width: 64px;
-  padding: 0 20px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--white);
-  color: var(--primary);
-  font-size: 13px;
-  font-weight: 500;
-  transition: 0.2s ease;
-}
-
-.filter:hover {
-  background: var(--primary-light);
-}
-
-.filter.active {
-  background: var(--primary);
-  color: white;
-}
-
-/* =========================================================
-   SEARCH RESULT
-========================================================= */
-
-.user-result {
-  width: 100%;
-  max-width: 760px;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  margin: 0 auto 22px;
-  padding: 16px;
-  border: 1px solid var(--border-light);
-  border-radius: 16px;
-  background: white;
-  box-shadow: var(--shadow);
-}
-
-.user-result > div:nth-child(2) {
-  flex: 1;
-  min-width: 0;
-}
-
-.user-result strong {
-  display: block;
-  font-size: 14px;
-}
-
-.user-result p {
-  margin: 3px 0;
-  color: var(--text-light);
-  font-size: 12px;
-}
-
-.user-result small {
-  color: var(--text-light);
-  font-size: 11px;
-}
-
-.user-result button {
-  height: 40px;
-  padding: 0 18px;
-  border: none;
-  border-radius: 9px;
-  background: var(--primary);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-/* =========================================================
-   HOME ERROR
-========================================================= */
-
-.home-error {
-  width: 100%;
-  margin: 0 auto 18px;
-  padding: 12px 15px;
-  border: 1px solid #ffd0db;
-  border-radius: 10px;
-  background: #fff4f7;
-  color: var(--danger);
-  font-size: 12px;
-}
-
-/* =========================================================
-   EMAIL LIST
-========================================================= */
-
-.email-list {
-  width: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.email-card {
-  width: 100%;
-  min-height: 108px;
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 18px;
-  border: 1px solid #e8e4f2;
-  border-radius: 15px;
-  background: white;
-  color: var(--text);
-  text-align: left;
-  box-shadow: none;
-  transition: 0.2s ease;
-}
-
-.email-card:hover {
-  border-color: var(--border);
-  box-shadow: 0 6px 20px rgba(87, 65, 176, 0.08);
-  transform: translateY(-1px);
-}
-
-.email-card.unread {
-  border-color: #d7cdf8;
-  background: #fcfbff;
-}
-
-.email-card.unread .email-content strong,
-.email-card.unread .email-content h3 {
-  font-weight: 700;
-}
-
-.email-avatar {
-  width: 48px;
-  height: 48px;
-  flex: 0 0 48px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  background: var(--primary-light);
-  color: var(--primary);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.email-content {
-  min-width: 0;
-  flex: 1;
-}
-
-.email-top {
-  width: 100%;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 15px;
-}
-
-.email-top strong {
-  overflow: hidden;
-  font-size: 13px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.email-top span {
-  flex: 0 0 auto;
-  color: #9992ad;
-  font-size: 11px;
-}
-
-.email-content h3 {
-  margin: 6px 0 2px;
-  overflow: hidden;
-  font-size: 14px;
-  font-weight: 500;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.email-content p {
-  margin: 0;
-  overflow: hidden;
-  color: var(--text-light);
-  font-size: 12px;
-  line-height: 1.5;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.unread-subject {
-  color: var(--text);
-  font-weight: 700 !important;
-}
-
-.favorite-star {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  color: #1c1729;
-  font-size: 23px;
-  line-height: 1;
-  transition: 0.15s ease;
-}
-
-.favorite-star:hover {
-  color: #e5b900;
-  transform: scale(1.12);
-}
-
-/* =========================================================
-   EMPTY STATE
-========================================================= */
-
-.empty-state {
-  width: 100%;
-  min-height: 350px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  align-items: center;
-  padding: 40px 20px;
-  border: 1px dashed var(--border-light);
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.5);
+.step {
+  margin: 24px 0 0;
   text-align: center;
+  color: #80868b;
+  font-size: 13px;
 }
 
-.empty-icon {
-  width: 64px;
-  height: 64px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  margin-bottom: 15px;
-  border-radius: 50%;
-  background: var(--primary-light);
-  color: var(--primary);
-  font-size: 26px;
+.account-info {
+  border: 1px solid #dadce0;
+  border-radius: 6px;
+  padding: 16px;
 }
 
-.empty-state h3 {
-  margin: 0 0 5px;
-  font-size: 18px;
-}
-
-.empty-state p {
+.account-info p {
   margin: 0 0 20px;
-  color: var(--text-light);
-  font-size: 13px;
+  font-size: 15px;
+  line-height: 1.6;
 }
 
-.empty-state button {
-  height: 42px;
-  padding: 0 18px;
-  border: none;
-  border-radius: 9px;
-  background: var(--primary);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
+.account-info p:last-child {
+  margin-bottom: 0;
 }
 
-/* =========================================================
-   EMAIL / CHAT VIEW
-========================================================= */
-
-/*
-  Important:
-  The email/chat area is deliberately centered inside
-  the RIGHT side of the application.
-*/
-
-.email-view {
-  width: min(900px, 100%);
-  margin: 10px auto 0;
-  padding-bottom: 50px;
-}
-
-.back-button {
-  height: 38px;
-  padding: 0 4px;
-  margin-bottom: 18px;
-  border: none;
-  background: transparent;
-  color: var(--primary);
-  font-size: 14px;
+.account-info strong {
   font-weight: 500;
+  color: #5f6368;
 }
 
-.back-button:hover {
-  text-decoration: underline;
-}
-
-.email-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.email-actions button {
-  height: 36px;
-  padding: 0 13px;
-  border: 1px solid #d9d2ed;
-  border-radius: 8px;
-  background: white;
-  color: var(--text);
-  font-size: 12px;
-  transition: 0.2s ease;
-}
-
-.email-actions button:hover {
-  border-color: var(--border);
-  background: var(--primary-light);
-  color: var(--primary);
-}
-
-.email-view > h1 {
-  max-width: 900px;
-  margin: 0 auto 26px;
-  font-size: 26px;
-  font-weight: 600;
-  word-break: break-word;
-}
-
-/* =========================================================
-   CONVERSATION
-========================================================= */
-
-.conversation-messages {
-  width: min(760px, 100%);
-  margin: 0 auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.message {
-  width: fit-content;
-  max-width: min(72%, 540px);
-  padding: 16px;
-  border: 1px solid var(--border-light);
-  border-radius: 15px;
-  background: white;
-  box-shadow: 0 5px 18px rgba(30, 20, 70, 0.05);
-}
-
-.message.received {
-  align-self: flex-start;
-  border-top-left-radius: 5px;
-}
-
-.message.sent {
-  align-self: flex-end;
-  border-color: #d1c5ff;
-  background: #eee9ff;
-  border-top-right-radius: 5px;
-}
-
-.message-header {
-  margin-bottom: 8px;
-  color: var(--primary);
-  font-size: 12px;
-}
-
-.message p {
-  margin: 0 0 10px;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.7;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.message small {
-  color: #928ba7;
-  font-size: 10px;
-}
-
-/* =========================================================
-   REPLY
-========================================================= */
-
-.reply-box {
-  width: min(760px, 100%);
-  margin: 24px auto 0;
-  display: flex;
-  align-items: flex-end;
-  gap: 10px;
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 14px;
-  background: white;
-  box-shadow: var(--shadow);
-}
-
-.reply-box textarea {
-  flex: 1;
-  min-width: 0;
-  min-height: 50px;
-  max-height: 150px;
-  resize: vertical;
-  padding: 12px;
-  border: 1px solid var(--border-light);
-  border-radius: 9px;
-  outline: none;
-  font-size: 12px;
-}
-
-.reply-box textarea:focus {
-  border-color: var(--border);
-}
-
-.reply-box button {
-  height: 44px;
-  min-width: 76px;
-  border: none;
-  border-radius: 9px;
-  background: var(--primary);
-  color: white;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.reply-box button:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.reply-box button:disabled {
-  opacity: 0.45;
-}
-
-/* =========================================================
-   MODAL
-========================================================= */
-
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  padding: 20px;
-  background: rgba(24, 18, 48, 0.42);
-  backdrop-filter: blur(4px);
-}
-
-.compose-modal {
-  width: min(520px, 100%);
-  max-height: calc(100vh - 40px);
-  overflow-y: auto;
-  padding: 22px;
-  border: 1px solid var(--border-light);
-  border-radius: 18px;
-  background: white;
-  box-shadow: 0 20px 60px rgba(25, 15, 70, 0.2);
-}
-
-.compose-modal::-webkit-scrollbar {
-  width: 7px;
-}
-
-.compose-modal::-webkit-scrollbar-thumb {
-  background: #b9ade9;
-  border-radius: 10px;
-}
-
-.compose-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 22px;
-}
-
-.compose-header h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 600;
-}
-
-.compose-header button {
-  width: 34px;
-  height: 34px;
-  border: none;
-  border-radius: 8px;
-  background: #f4f1fc;
-  color: var(--text-light);
-  font-size: 18px;
-}
-
-.compose-header button:hover {
-  background: var(--primary-light);
-  color: var(--primary);
-}
-
-.compose-modal > label {
-  display: block;
-  margin: 14px 0 7px;
-  color: var(--text);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.compose-modal > input,
-.compose-modal > textarea {
-  width: 100%;
-  border: 1px solid var(--border-light);
-  border-radius: 9px;
-  outline: none;
-  font-size: 12px;
-}
-
-.compose-modal > input {
-  height: 44px;
-  padding: 0 12px;
-}
-
-.compose-modal > textarea {
-  min-height: 150px;
-  resize: vertical;
-  padding: 12px;
-}
-
-.compose-modal > input:focus,
-.compose-modal > textarea:focus {
-  border-color: var(--border);
-  box-shadow: 0 0 0 3px rgba(141, 120, 226, 0.1);
-}
-
-.compose-modal > small {
-  display: block;
-  margin-top: 6px;
-  color: var(--text-light);
-  font-size: 10px;
-}
-
-.send-button {
-  width: 100%;
-  height: 46px;
-  margin-top: 18px;
-  border: none;
-  border-radius: 10px;
-  background: var(--primary);
-  color: white;
-  font-size: 13px;
-  font-weight: 600;
-  transition: 0.2s ease;
-}
-
-.send-button:hover:not(:disabled) {
-  background: var(--primary-hover);
-}
-
-.send-button:disabled {
-  opacity: 0.45;
-}
-
-/* =========================================================
-   PROFILE MODAL
-========================================================= */
-
-.profile-details {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  padding: 15px 0 10px;
-  text-align: center;
-}
-
-.profile-details .avatar {
-  margin-bottom: 5px;
-}
-
-.profile-details strong {
-  color: var(--text);
-  font-size: 14px;
-  font-weight: 600;
-  word-break: break-all;
-}
-
-.profile-details span {
-  color: var(--text-light);
-  font-size: 11px;
-}
-
-/* =========================================================
-   TOAST
-========================================================= */
-
-.toast-container {
-  position: fixed;
-  top: 20px;
-  right: 24px;
-  z-index: 3000;
-  width: min(380px, calc(100vw - 40px));
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  pointer-events: none;
-}
-
-.toast {
-  width: 100%;
-  min-height: 54px;
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  padding: 10px 12px;
-  border: 1px solid #dcd4f5;
-  border-radius: 12px;
-  background: white;
-  box-shadow: 0 12px 30px rgba(31, 20, 75, 0.15);
-  pointer-events: auto;
-  animation: toastIn 0.22s ease-out;
-}
-
-.toast-icon {
-  width: 30px;
-  height: 30px;
-  flex: 0 0 30px;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  border-radius: 50%;
-  background: var(--primary-light);
-  color: var(--primary);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.toast-message {
-  flex: 1;
-  min-width: 0;
-  color: var(--text);
-  font-size: 12px;
-  line-height: 1.4;
-  overflow-wrap: anywhere;
-}
-
-.toast-close {
-  width: 28px;
-  height: 28px;
-  flex: 0 0 28px;
-  border: none;
-  border-radius: 7px;
-  background: transparent;
-  color: #918ba2;
-  font-size: 19px;
-}
-
-.toast-close:hover {
-  background: #f4f1fc;
-  color: var(--text);
-}
-
-@keyframes toastIn {
-  from {
-    opacity: 0;
-    transform: translateY(-8px);
+@media (max-width: 480px) {
+  .container {
+    padding: 48px 20px 30px;
   }
 
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
-/* =========================================================
-   TABLET
-========================================================= */
-
-@media (max-width: 1000px) {
-  :root {
-    --sidebar-width: 230px;
+  h1 {
+    margin-bottom: 48px;
+    font-size: 26px;
   }
 
-  .sidebar {
-    padding: 24px 18px 18px;
-  }
-
-  .home-main {
-    padding: 32px 32px 60px;
-  }
-
-  .home-header {
-    flex-direction: column;
-  }
-
-  .search-container {
-    width: 100%;
-    min-width: 0;
-  }
-}
-
-/* =========================================================
-   MOBILE
-========================================================= */
-
-@media (max-width: 700px) {
-  :root {
-    --sidebar-width: 82px;
-  }
-
-  .home-page {
-    height: 100vh;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE SIDEBAR
-  ------------------------------------------------------- */
-
-  .sidebar {
-    width: 82px;
-    flex: 0 0 82px;
-    height: 100vh;
-    padding: 16px 10px;
-    align-items: center;
-  }
-
-  /*
-    Logo becomes only the logo image/mark.
-    The PhoneMail text is intentionally hidden.
-  */
-
-  .logo {
-    width: 58px;
-    height: 48px;
-    justify-content: center;
-    margin-bottom: 14px;
-  }
-
-  .logo::before {
-    width: 42px;
-    height: 42px;
-  }
-
-  .compose-button {
-    width: 58px;
-    height: 58px;
-    padding: 0;
-    border-radius: 13px;
-    font-size: 0;
-  }
-
-  .compose-button::before {
-    content: "+";
-    font-size: 30px;
-    font-weight: 400;
-    line-height: 1;
-  }
-
-  .sidebar-nav {
-    width: 100%;
-    gap: 7px;
-    margin-top: 18px;
-  }
-
-  /*
-    IMPORTANT:
-    The JSX contains text directly inside nav buttons.
-    Setting font-size:0 removes those text labels on mobile.
-    Pseudo-elements then supply clean icons.
-  */
-
-  .nav-item {
-    width: 62px;
-    height: 54px;
-    min-height: 54px;
-    justify-content: center;
-    padding: 0;
-    margin: 0 auto;
-    border-radius: 11px;
-    font-size: 0;
-  }
-
-  .nav-item-content {
-    width: 100%;
-    justify-content: center;
-  }
-
-  .nav-item-content > span:first-child {
-    width: auto;
-    font-size: 0;
-  }
-
-  .nav-item-content > span:first-child::before {
-    font-size: 21px;
-  }
-
-  /*
-    Inbox
-  */
-  .nav-item:nth-child(1)::before {
-    content: "📥";
-    font-size: 20px;
-  }
-
-  /*
-    Sent
-  */
-  .nav-item:nth-child(2)::before {
-    content: "📤";
-    font-size: 20px;
-  }
-
-  /*
-    Favorites
-  */
-  .nav-item:nth-child(3)::before {
-    content: "★";
-    color: #e4b800;
-    font-size: 22px;
-  }
-
-  /*
-    Drafts
-  */
-  .nav-item:nth-child(4)::before {
-    content: "📝";
-    font-size: 19px;
-  }
-
-  /*
-    Spam
-  */
-  .nav-item:nth-child(5)::before {
-    content: "🚫";
-    font-size: 19px;
-  }
-
-  /*
-    Trash
-  */
-  .nav-item:nth-child(6)::before {
-    content: "🗑";
-    font-size: 19px;
-  }
-
-  .unread-badge {
-    position: absolute;
-    width: 17px;
-    min-width: 17px;
-    height: 17px;
-    padding: 0;
-    margin: -28px -28px 0 0;
-    font-size: 8px;
-  }
-
-  .sidebar-bottom {
-    width: 100%;
-    align-items: center;
-    gap: 9px;
-  }
-
-  .profile-mini {
-    width: 62px;
-    min-height: 62px;
-    height: 62px;
-    justify-content: center;
-    padding: 7px;
-    border-radius: 12px;
-  }
-
-  .profile-mini > div:last-child {
-    display: none;
-  }
-
-  .profile-mini .avatar {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
-  }
-
-  /*
-    Logout becomes an icon-only button.
-  */
-
-  .logout-button {
-    width: 62px;
-    height: 44px;
-    padding: 0;
-    font-size: 0;
-    border-radius: 11px;
-  }
-
-  .logout-button::before {
-    content: "↪";
-    font-size: 23px;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE MAIN
-  ------------------------------------------------------- */
-
-  .home-main {
-    width: calc(100% - 82px);
-    flex: 1;
-    height: 100vh;
-    min-width: 0;
-    padding: 20px 20px 50px;
-  }
-
-  .home-main::-webkit-scrollbar {
-    width: 7px;
-  }
-
-  .home-header {
-    display: block;
-    margin-bottom: 20px;
-  }
-
-  .home-header h2 {
+  h2 {
     font-size: 25px;
   }
 
-  .home-header p {
-    max-width: 100%;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-    font-size: 10px;
+  .language {
+    padding: 15px;
   }
 
-  .search-container {
-    width: 100%;
-    height: 50px;
-    margin-top: 18px;
-  }
-
-  .search-container button {
-    width: 100px;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE FILTERS
-  ------------------------------------------------------- */
-
-  .filter-bar {
-    gap: 9px;
-    margin-bottom: 20px;
-  }
-
-  .filter {
-    height: 42px;
-    padding: 0 16px;
-    font-size: 12px;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE EMAIL LIST
-  ------------------------------------------------------- */
-
-  .email-card {
-    min-height: 94px;
-    gap: 11px;
-    padding: 14px 12px;
-    border-radius: 13px;
-  }
-
-  .email-avatar {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
-    font-size: 11px;
-  }
-
-  .email-top {
-    gap: 7px;
-  }
-
-  .email-top strong {
-    max-width: 65%;
-    font-size: 11px;
-  }
-
-  .email-top span {
-    font-size: 9px;
-  }
-
-  .email-content h3 {
-    margin-top: 4px;
-    font-size: 12px;
-  }
-
-  .email-content p {
-    font-size: 10px;
-  }
-
-  .favorite-star {
-    width: 26px;
-    height: 26px;
-    flex-basis: 26px;
-    font-size: 21px;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE SEARCH RESULT
-  ------------------------------------------------------- */
-
-  .user-result {
-    padding: 12px;
-    gap: 10px;
-  }
-
-  .user-result .avatar {
-    width: 42px;
-    height: 42px;
-    flex-basis: 42px;
-  }
-
-  .user-result strong {
-    font-size: 12px;
-  }
-
-  .user-result p,
-  .user-result small {
-    font-size: 9px;
-  }
-
-  .user-result button {
-    height: 36px;
-    padding: 0 12px;
-    font-size: 10px;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE EMAIL VIEW
-  ------------------------------------------------------- */
-
-  .email-view {
-    width: 100%;
-    margin: 0 auto;
-    padding-bottom: 30px;
-  }
-
-  .back-button {
-    margin-bottom: 15px;
-    font-size: 12px;
-  }
-
-  .email-actions {
-    gap: 6px;
-    margin-bottom: 17px;
-  }
-
-  .email-actions button {
-    height: 34px;
-    padding: 0 10px;
-    font-size: 10px;
-  }
-
-  .email-view > h1 {
-    margin-bottom: 22px;
-    font-size: 21px;
-  }
-
-  /*
-    Chat remains centered within the RIGHT content area.
-  */
-
-  .conversation-messages {
-    width: 100%;
-    max-width: 620px;
-    margin: 0 auto;
-    gap: 13px;
-  }
-
-  .message {
-    max-width: 78%;
-    padding: 13px;
-    border-radius: 13px;
-  }
-
-  .message p {
-    font-size: 11px;
-    line-height: 1.6;
-  }
-
-  .message-header {
-    font-size: 11px;
-  }
-
-  .message small {
-    font-size: 9px;
-  }
-
-  .reply-box {
-    width: 100%;
-    padding: 9px;
-    margin-top: 18px;
-    gap: 7px;
-  }
-
-  .reply-box textarea {
-    min-height: 44px;
-    padding: 10px;
-    font-size: 11px;
-  }
-
-  .reply-box button {
-    min-width: 65px;
-    height: 42px;
-    font-size: 10px;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE MODALS
-  ------------------------------------------------------- */
-
-  .modal-overlay {
-    align-items: flex-end;
-    padding: 10px;
-  }
-
-  .compose-modal {
-    width: 100%;
-    max-height: calc(100vh - 20px);
-    padding: 18px;
-    border-radius: 18px;
-  }
-
-  .compose-header {
-    margin-bottom: 16px;
-  }
-
-  .compose-header h2 {
-    font-size: 18px;
-  }
-
-  .compose-modal > input {
-    height: 43px;
-  }
-
-  .compose-modal > textarea {
-    min-height: 130px;
-  }
-
-  /* -------------------------------------------------------
-     MOBILE TOAST
-  ------------------------------------------------------- */
-
-  .toast-container {
-    top: 12px;
-    right: 12px;
-    left: 12px;
-    width: auto;
-  }
-
-  .toast {
-    min-height: 50px;
-  }
-}
-
-/* =========================================================
-   SMALL PHONES
-========================================================= */
-
-@media (max-width: 430px) {
-  :root {
-    --sidebar-width: 72px;
-  }
-
-  .sidebar {
-    width: 72px;
-    flex-basis: 72px;
-    padding-left: 7px;
-    padding-right: 7px;
-  }
-
-  .home-main {
-    width: calc(100% - 72px);
-    padding: 17px 13px 40px;
-  }
-
-  .logo,
-  .compose-button,
-  .nav-item,
-  .profile-mini,
-  .logout-button {
-    width: 56px;
-  }
-
-  .compose-button {
-    height: 56px;
-  }
-
-  .nav-item {
-    height: 51px;
-    min-height: 51px;
-  }
-
-  .profile-mini {
-    height: 56px;
-    min-height: 56px;
-  }
-
-  .logout-button {
-    height: 42px;
-  }
-
-  .home-header h2 {
-    font-size: 23px;
-  }
-
-  .search-container button {
-    width: 88px;
-  }
-
-  .filter {
-    padding: 0 13px;
-  }
-
-  .email-card {
-    padding: 12px 9px;
-  }
-
-  .email-avatar {
-    width: 38px;
-    height: 38px;
-    flex-basis: 38px;
-  }
-
-  .message {
-    max-width: 84%;
-  }
-
-  .message p {
-    font-size: 10.5px;
-  }
-}
-
-/* =========================================================
-   VERY SMALL HEIGHTS
-========================================================= */
-
-@media (max-height: 650px) {
-  .sidebar {
-    padding-top: 12px;
-    padding-bottom: 12px;
-  }
-
-  .logo {
-    margin-bottom: 8px;
-  }
-
-  .compose-button {
-    height: 48px;
-  }
-
-  .sidebar-nav {
-    margin-top: 10px;
-    gap: 2px;
-  }
-
-  .nav-item {
-    min-height: 43px;
+  .continue-button {
+    padding: 13px 20px;
   }
 }

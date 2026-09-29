@@ -147,14 +147,14 @@ const verifyOTP = async (req, res) => {
 
     // Check OTP
     if (otpRecord.otp !== otp) {
-      return res.status(400).json({
+    return res.status(400).json({
         message: "Invalid OTP"
-      });
-    }
-
-    await OTP.deleteOne({
-      _id: otpRecord._id
     });
+}
+
+await OTP.deleteOne({
+    _id: otpRecord._id
+});
 
 
     // ======================================

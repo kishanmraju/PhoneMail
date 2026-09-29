@@ -4,6 +4,61 @@ const crypto = require("crypto");
 
 
 // ==========================================
+// REAL-TIME EMAIL EMITTER
+// IMPORTANT:
+// Socket errors must NEVER make email sending
+// fail. MongoDB save is the source of truth.
+// ==========================================
+
+const emitNewEmails = (req, emails) => {
+  try {
+    const io = req.app.get("io");
+
+    if (!io || !emails) {
+      return;
+    }
+
+    for (const email of emails) {
+      try {
+        const recipient =
+          email.recipients?.[0];
+
+        if (!recipient) {
+          continue;
+        }
+
+        const emailData =
+          typeof email.toObject === "function"
+            ? email.toObject()
+            : email;
+
+        io
+          .to(String(recipient))
+          .emit(
+            "new-email",
+            emailData
+          );
+
+      } catch (socketError) {
+        // VERY IMPORTANT:
+        // Real-time failure must NOT fail the email.
+        console.error(
+          "Real-time email delivery failed:",
+          socketError.message
+        );
+      }
+    }
+
+  } catch (error) {
+    console.error(
+      "Socket notification error:",
+      error.message
+    );
+  }
+};
+
+
+// ==========================================
 // CHECK WHETHER USER CAN ACCESS EMAIL
 // ==========================================
 
@@ -283,8 +338,14 @@ const sendEmail = async (req, res) => {
       );
 
 
-    await Email.insertMany(
-      inboxEmails
+    const createdInboxEmails =
+      await Email.insertMany(
+        inboxEmails
+      );
+
+    emitNewEmails(
+      req,
+      createdInboxEmails
     );
 
 
@@ -587,6 +648,10 @@ const getConversation = async (
 // REPLY TO EMAIL
 // ==========================================
 
+// ==========================================
+// REPLY TO EMAIL
+// ==========================================
+
 const replyToEmail = async (
   req,
   res
@@ -601,6 +666,10 @@ const replyToEmail = async (
     } = req.body;
 
 
+    // --------------------------------
+    // VALIDATE BODY
+    // --------------------------------
+
     if (
       !body ||
       !body.trim()
@@ -611,6 +680,10 @@ const replyToEmail = async (
       });
     }
 
+
+    // --------------------------------
+    // FIND ORIGINAL EMAIL
+    // --------------------------------
 
     const originalEmail =
       await Email.findById(id);
@@ -623,6 +696,10 @@ const replyToEmail = async (
       });
     }
 
+
+    // --------------------------------
+    // CURRENT USER
+    // --------------------------------
 
     const currentUser =
       req.user.phoneNumber;
@@ -660,7 +737,7 @@ const replyToEmail = async (
 
 
     // --------------------------------
-    // ORIGINAL SENDER
+    // ORIGINAL SENDER = REPLY RECIPIENT
     // --------------------------------
 
     const recipient =
@@ -687,9 +764,9 @@ const replyToEmail = async (
 
     const replySubject =
       originalEmail.subject &&
-      originalEmail.subject.startsWith(
-        "Re:"
-      )
+        originalEmail.subject.startsWith(
+          "Re:"
+        )
         ? originalEmail.subject
         : originalEmail.subject
           ? `Re: ${originalEmail.subject}`
@@ -697,7 +774,7 @@ const replyToEmail = async (
 
 
     // --------------------------------
-    // CREATE SENT REPLY
+    // CREATE SENDER'S SENT COPY
     // --------------------------------
 
     const reply =
@@ -708,6 +785,9 @@ const replyToEmail = async (
         recipients: [
           recipient
         ],
+
+        cc:
+          originalEmail.cc || [],
 
         subject:
           replySubject,
@@ -727,32 +807,46 @@ const replyToEmail = async (
 
 
     // --------------------------------
-    // CREATE RECIPIENT INBOX COPY
+    // CREATE RECIPIENT'S INBOX COPY
     // --------------------------------
 
-    await Email.create({
-      sender:
-        currentUser,
+    const inboxReply =
+      await Email.create({
+        sender:
+          currentUser,
 
-      recipients: [
-        recipient
-      ],
+        recipients: [
+          recipient
+        ],
 
-      subject:
-        replySubject,
+        cc:
+          originalEmail.cc || [],
 
-      body:
-        body.trim(),
+        subject:
+          replySubject,
 
-      threadId:
-        originalEmail.threadId,
+        body:
+          body.trim(),
 
-      folder:
-        "inbox",
+        threadId:
+          originalEmail.threadId,
 
-      isRead:
-        false
-    });
+        folder:
+          "inbox",
+
+        isRead:
+          false
+      });
+
+
+    // --------------------------------
+    // REAL-TIME NOTIFICATION
+    // --------------------------------
+
+    emitNewEmails(
+      req,
+      [inboxReply]
+    );
 
 
     // --------------------------------
@@ -765,7 +859,11 @@ const replyToEmail = async (
     await originalEmail.save();
 
 
-    res.status(201).json({
+    // --------------------------------
+    // RESPONSE
+    // --------------------------------
+
+    return res.status(201).json({
       message:
         "Reply sent successfully",
 
@@ -774,12 +872,13 @@ const replyToEmail = async (
     });
 
   } catch (error) {
+
     console.error(
       "Reply error:",
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       message:
         "Failed to send reply"
     });
@@ -1511,6 +1610,10 @@ const permanentlyDeleteEmail = async (
 // SEND DRAFT
 // ==========================================
 
+// ==========================================
+// SEND DRAFT
+// ==========================================
+
 const sendDraft = async (
   req,
   res
@@ -1520,14 +1623,12 @@ const sendDraft = async (
       id
     } = req.params;
 
-
     const {
       recipients,
       cc,
       subject,
       body
     } = req.body;
-
 
     const sender =
       req.user.phoneNumber;
@@ -1538,7 +1639,6 @@ const sendDraft = async (
     // --------------------------------
 
     if (
-      !recipients ||
       !Array.isArray(recipients) ||
       recipients.length === 0
     ) {
@@ -1547,7 +1647,6 @@ const sendDraft = async (
           "At least one recipient is required"
       });
     }
-
 
     if (
       !body ||
@@ -1566,16 +1665,10 @@ const sendDraft = async (
 
     const draft =
       await Email.findOne({
-        _id:
-          id,
-
-        sender:
-          sender,
-
-        folder:
-          "draft"
+        _id: id,
+        sender: sender,
+        folder: "draft"
       });
-
 
     if (!draft) {
       return res.status(404).json({
@@ -1586,27 +1679,46 @@ const sendDraft = async (
 
 
     // --------------------------------
-    // UNIQUE RECIPIENTS
+    // REMOVE DUPLICATES
     // --------------------------------
 
-    const uniqueRecipients =
-      [
-        ...new Set(
-          recipients
-        )
-      ];
+    const uniqueRecipients = [
+      ...new Set(
+        recipients
+          .map((number) =>
+            String(number).replace(
+              /\D/g,
+              ""
+            )
+          )
+          .filter(Boolean)
+      )
+    ];
+
+    const uniqueCC = [
+      ...new Set(
+        Array.isArray(cc)
+          ? cc
+            .map((number) =>
+              String(number).replace(
+                /\D/g,
+                ""
+              )
+            )
+            .filter(Boolean)
+          : []
+      )
+    ];
 
 
-    // --------------------------------
-    // UNIQUE CC
-    // --------------------------------
-
-    const uniqueCC =
-      [
-        ...new Set(
-          cc || []
-        )
-      ];
+    if (
+      uniqueRecipients.length === 0
+    ) {
+      return res.status(400).json({
+        message:
+          "At least one valid recipient is required"
+      });
+    }
 
 
     // --------------------------------
@@ -1616,11 +1728,8 @@ const sendDraft = async (
     const overlappingRecipients =
       uniqueRecipients.filter(
         number =>
-          uniqueCC.includes(
-            number
-          )
+          uniqueCC.includes(number)
       );
-
 
     if (
       overlappingRecipients.length > 0
@@ -1635,17 +1744,21 @@ const sendDraft = async (
 
 
     // --------------------------------
-    // CHECK RECIPIENTS
+    // CHECK RECIPIENTS EXIST
     // --------------------------------
 
     const users =
-      await User.find({
-        phoneNumber: {
-          $in:
-            uniqueRecipients
+      await User.find(
+        {
+          phoneNumber: {
+            $in:
+              uniqueRecipients
+          }
+        },
+        {
+          phoneNumber: 1
         }
-      });
-
+      );
 
     const registeredNumbers =
       new Set(
@@ -1655,7 +1768,6 @@ const sendDraft = async (
         )
       );
 
-
     const invalidRecipients =
       uniqueRecipients.filter(
         number =>
@@ -1663,7 +1775,6 @@ const sendDraft = async (
             number
           )
       );
-
 
     if (
       invalidRecipients.length > 0
@@ -1684,14 +1795,19 @@ const sendDraft = async (
     if (
       uniqueCC.length > 0
     ) {
-      const ccUsers =
-        await User.find({
-          phoneNumber: {
-            $in:
-              uniqueCC
-          }
-        });
 
+      const ccUsers =
+        await User.find(
+          {
+            phoneNumber: {
+              $in:
+                uniqueCC
+            }
+          },
+          {
+            phoneNumber: 1
+          }
+        );
 
       const registeredCCNumbers =
         new Set(
@@ -1701,7 +1817,6 @@ const sendDraft = async (
           )
         );
 
-
       const invalidCC =
         uniqueCC.filter(
           number =>
@@ -1709,7 +1824,6 @@ const sendDraft = async (
               number
             )
         );
-
 
       if (
         invalidCC.length > 0
@@ -1725,7 +1839,7 @@ const sendDraft = async (
 
 
     // --------------------------------
-    // CREATE NEW THREAD ID
+    // CREATE NEW THREAD
     // --------------------------------
 
     const threadId =
@@ -1733,7 +1847,7 @@ const sendDraft = async (
 
 
     // --------------------------------
-    // UPDATE DRAFT → SENT
+    // CONVERT DRAFT → SENT
     // --------------------------------
 
     draft.recipients =
@@ -1794,16 +1908,29 @@ const sendDraft = async (
       );
 
 
-    await Email.insertMany(
-      inboxEmails
+    const createdInboxEmails =
+      await Email.insertMany(
+        inboxEmails
+      );
+
+
+    // --------------------------------
+    // REAL-TIME NOTIFICATION
+    // IMPORTANT:
+    // This cannot break sending.
+    // --------------------------------
+
+    emitNewEmails(
+      req,
+      createdInboxEmails
     );
 
 
     // --------------------------------
-    // RESPONSE
+    // SUCCESS RESPONSE
     // --------------------------------
 
-    res.status(200).json({
+    return res.status(200).json({
       message:
         "Draft sent successfully",
 
@@ -1812,12 +1939,13 @@ const sendDraft = async (
     });
 
   } catch (error) {
+
     console.error(
       "Send draft error:",
       error
     );
 
-    res.status(500).json({
+    return res.status(500).json({
       message:
         "Failed to send draft"
     });
@@ -1846,5 +1974,6 @@ module.exports = {
   getSpam,
   restoreEmail,
   permanentlyDeleteEmail,
-  sendDraft
+  sendDraft,
+  emitNewEmails
 };

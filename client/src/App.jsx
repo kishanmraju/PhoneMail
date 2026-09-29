@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { io } from "socket.io-client";
 import "./App.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
@@ -44,6 +45,18 @@ function App() {
 
   const [toasts, setToasts] = useState([]);
   const toastTimers = useRef({});
+
+  const viewRef = useRef(view);
+  const selectedEmailRef = useRef(selectedEmail);
+
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
+
+  useEffect(() => {
+    selectedEmailRef.current =
+      selectedEmail;
+  }, [selectedEmail]);
 
   const languages = [
     { name: "English", native: "English" },
@@ -662,6 +675,173 @@ function App() {
       fetchUnreadCount();
     }
   }, [screen, view]);
+
+
+  // --------------------------------------------------
+  // REAL-TIME EMAIL CONNECTION
+  // --------------------------------------------------
+
+  useEffect(() => {
+
+    if (
+      screen !== 5 ||
+      !token
+    ) {
+      return;
+    }
+
+    const socket =
+      io(API_URL, {
+        auth: {
+          token
+        }
+      });
+
+    socket.on(
+      "connect",
+      () => {
+        console.log(
+          "Socket.IO connected:",
+          socket.id
+        );
+      }
+    );
+
+    socket.on(
+      "socket-connected",
+      () => {
+        console.log(
+          "PhoneMail real-time connection established"
+        );
+      }
+    );
+
+    socket.on(
+      "connect_error",
+      (error) => {
+        console.error(
+          "Socket.IO connection error:",
+          error.message
+        );
+      }
+    );
+
+    socket.on(
+      "new-email",
+      (email) => {
+
+        console.log(
+          "REAL-TIME EMAIL RECEIVED:",
+          email
+        );
+
+        /*
+          Prevent duplicate email if the
+          event somehow arrives twice.
+        */
+
+        setEmails(
+          (currentEmails) => {
+
+            const alreadyExists =
+              currentEmails.some(
+                (item) =>
+                  item._id === email._id
+              );
+
+            if (
+              alreadyExists
+            ) {
+              return currentEmails;
+            }
+
+            /*
+              Only add the incoming email
+              to views where it belongs.
+            */
+
+            if (
+              viewRef.current ===
+              "inbox" ||
+              viewRef.current ===
+              "unread"
+            ) {
+              return [
+                email,
+                ...currentEmails
+              ];
+            }
+
+            return currentEmails;
+          }
+        );
+
+        /*
+          If the user is currently
+          viewing this conversation,
+          immediately add the new
+          message to the chat.
+        */
+
+        const currentEmail =
+          selectedEmailRef.current;
+
+        if (
+          currentEmail &&
+          currentEmail.threadId ===
+          email.threadId
+        ) {
+
+          setConversation(
+            (currentConversation) => {
+
+              const alreadyExists =
+                currentConversation.some(
+                  (item) =>
+                    item._id ===
+                    email._id
+                );
+
+              if (
+                alreadyExists
+              ) {
+                return currentConversation;
+              }
+
+              return [
+                ...currentConversation,
+                email
+              ];
+            }
+          );
+        }
+
+        /*
+          New inbox email is unread.
+        */
+
+        setUnreadCount(
+          (currentCount) =>
+            currentCount + 1
+        );
+
+        showToast(
+          `New email from ${email.sender}`,
+          "✉️"
+        );
+      }
+    );
+
+    return () => {
+
+      socket.disconnect();
+
+      console.log(
+        "Socket.IO disconnected"
+      );
+    };
+
+  }, [screen, token]);
 
   // --------------------------------------------------
   // SEARCH USER

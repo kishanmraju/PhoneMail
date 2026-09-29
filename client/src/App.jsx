@@ -3,6 +3,9 @@ import { io } from "socket.io-client";
 import "./App.css";
 
 const API_URL = import.meta.env.VITE_API_URL;
+const MSG91_WIDGET_ID = import.meta.env.VITE_MSG91_WIDGET_ID;
+
+const MSG91_WIDGET_TOKEN = import.meta.env.VITE_MSG91_WIDGET_TOKEN;
 
 function App() {
   const [selectedLanguage, setSelectedLanguage] = useState("English");
@@ -16,6 +19,8 @@ function App() {
 
   const [phoneNumber, setPhoneNumber] = useState("");
   const [otp, setOtp] = useState("");
+
+  const [msg91ReqId, setMsg91ReqId] = useState("");
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -68,6 +73,97 @@ function App() {
 
   const token = localStorage.getItem("token");
   const user = JSON.parse(localStorage.getItem("user") || "{}");
+
+  useEffect(() => {
+    if (!MSG91_WIDGET_ID || !MSG91_WIDGET_TOKEN) {
+      console.error(
+        "MSG91 Widget ID or Widget Token is missing"
+      );
+      return;
+    }
+
+    const initializeMSG91 = () => {
+      if (
+        typeof window.initSendOTP !== "function"
+      ) {
+        console.error(
+          "MSG91 OTP Widget failed to initialize"
+        );
+        return;
+      }
+
+      if (window.__phoneMailMSG91Initialized) {
+        return;
+      }
+
+      const configuration = {
+        widgetId: MSG91_WIDGET_ID,
+
+        tokenAuth: MSG91_WIDGET_TOKEN,
+
+        exposeMethods: true,
+
+        captchaRenderId: "",
+
+        success: (data) => {
+          console.log(
+            "MSG91 success:",
+            data
+          );
+        },
+
+        failure: (error) => {
+          console.error(
+            "MSG91 failure:",
+            error
+          );
+        }
+      };
+
+      window.initSendOTP(
+        configuration
+      );
+
+      window.__phoneMailMSG91Initialized = true;
+
+      console.log(
+        "MSG91 OTP Widget initialized"
+      );
+    };
+
+    const existingScript =
+      document.querySelector(
+        'script[src="https://verify.msg91.com/otp-provider.js"]'
+      );
+
+    if (existingScript) {
+      initializeMSG91();
+      return;
+    }
+
+    const script =
+      document.createElement("script");
+
+    script.src =
+      "https://verify.msg91.com/otp-provider.js";
+
+    script.async = true;
+
+    script.onload =
+      initializeMSG91;
+
+    script.onerror = () => {
+      console.error(
+        "Could not load MSG91 OTP Widget"
+      );
+    };
+
+    document.body.appendChild(script);
+
+    return () => {
+      script.remove();
+    };
+  }, []);
 
   // --------------------------------------------------
   // HELPERS
@@ -374,95 +470,301 @@ function App() {
   // --------------------------------------------------
   // SEND OTP
   // --------------------------------------------------
+  //! OLD SEND OTP
+  // const sendOTP = async () => {
+  //   setError("");
+  //   setLoading(true);
 
-  const sendOTP = async () => {
+  //   try {
+  //     const response = await fetch(
+  //       `${API_URL}/api/auth/send-otp`,
+  //       {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //         },
+  //         body: JSON.stringify({
+  //           phoneNumber,
+  //         }),
+  //       }
+  //     );
+
+  //     const data = await response.json();
+
+  //     if (!response.ok) {
+  //       throw new Error(
+  //         data.message ||
+  //         "Failed to send OTP"
+  //       );
+  //     }
+
+  //     setScreen(4);
+  //   } catch (error) {
+  //     setError(error.message);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  //! NEW SEND OTP
+
+  const sendOTP = () => {
     setError("");
     setLoading(true);
 
-    try {
-      const response = await fetch(
-        `${API_URL}/api/auth/send-otp`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            phoneNumber,
-          }),
-        }
+    if (
+      typeof window.sendOtp !== "function"
+    ) {
+      setError(
+        "OTP service is still loading. Please try again."
       );
 
-      const data = await response.json();
+      setLoading(false);
+      return;
+    }
 
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
+    const identifier =
+      `91${phoneNumber}`;
+
+    console.log(
+      "Sending MSG91 OTP to:",
+      identifier
+    );
+
+    window.sendOtp(
+      identifier,
+
+      (data) => {
+        console.log(
+          "MSG91 OTP sent:",
+          data
+        );
+
+        const reqId =
+          data?.message ||
+          data?.reqId ||
+          data?.["reqId"] ||
+          "";
+
+        setMsg91ReqId(
+          typeof reqId === "string"
+            ? reqId
+            : ""
+        );
+
+        setOtp("");
+
+        setScreen(4);
+
+        setLoading(false);
+      },
+
+      (error) => {
+        console.error(
+          "MSG91 Send OTP error:",
+          error
+        );
+
+        setError(
+          error?.message ||
           "Failed to send OTP"
         );
-      }
 
-      setScreen(4);
-    } catch (error) {
-      setError(error.message);
-    } finally {
-      setLoading(false);
-    }
+        setLoading(false);
+      }
+    );
   };
+
 
   // --------------------------------------------------
   // VERIFY OTP
   // --------------------------------------------------
+  //! VERIFY OTP OLD
+  // const verifyOTP = async () => {
+  //   setError("");
+  //   setLoading(true);
 
-  const verifyOTP = async () => {
+  //   try {
+  //     const response = await fetch(
+  //       `${API_URL}/api/auth/verify-otp`,
+  //       {
+  //         method: "POST",
+  //         headers: {
+  //           "Content-Type": "application/json",
+  //         },
+  //         body: JSON.stringify({
+  //           phoneNumber,
+  //           otp,
+  //         }),
+  //       }
+  //     );
+
+  //     const data = await response.json();
+
+  //     if (!response.ok) {
+  //       throw new Error(
+  //         data.message ||
+  //         "Failed to verify OTP"
+  //       );
+  //     }
+
+  //     localStorage.setItem(
+  //       "token",
+  //       data.token
+  //     );
+
+  //     localStorage.setItem(
+  //       "user",
+  //       JSON.stringify(data.user)
+  //     );
+
+  //     setScreen(5);
+
+  //     setPhoneNumber("");
+  //     setOtp("");
+  //     setError("");
+  //     setView("inbox");
+  //   } catch (error) {
+  //     setError(error.message);
+  //   } finally {
+  //     setLoading(false);
+  //   }
+  // };
+
+  //! VERIFY OTP NEW
+
+  const verifyOTP = () => {
     setError("");
     setLoading(true);
 
-    try {
-      const response = await fetch(
-        `${API_URL}/api/auth/verify-otp`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            phoneNumber,
-            otp,
-          }),
-        }
+    if (
+      typeof window.verifyOtp !== "function"
+    ) {
+      setError(
+        "OTP service is not ready. Please try again."
       );
 
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(
-          data.message ||
-          "Failed to verify OTP"
-        );
-      }
-
-      localStorage.setItem(
-        "token",
-        data.token
-      );
-
-      localStorage.setItem(
-        "user",
-        JSON.stringify(data.user)
-      );
-
-      setScreen(5);
-
-      setPhoneNumber("");
-      setOtp("");
-      setError("");
-      setView("inbox");
-    } catch (error) {
-      setError(error.message);
-    } finally {
       setLoading(false);
+      return;
     }
+
+    window.verifyOtp(
+      otp,
+
+      async (data) => {
+        try {
+          console.log(
+            "MSG91 OTP verified:",
+            data
+          );
+
+          const accessToken =
+            data?.["access-token"] ||
+            data?.access_token ||
+            data?.accessToken ||
+            (
+              typeof data?.message === "string"
+                ? data.message
+                : ""
+            );
+
+          if (!accessToken) {
+            console.error(
+              "MSG91 response did not contain access token:",
+              data
+            );
+
+            throw new Error(
+              "MSG91 did not return an access token"
+            );
+          }
+
+          // ==================================
+          // SEND MSG91 ACCESS TOKEN TO SERVER
+          // ==================================
+
+          const response =
+            await fetch(
+              `${API_URL}/api/auth/verify-msg91-token`,
+              {
+                method: "POST",
+
+                headers: {
+                  "Content-Type":
+                    "application/json"
+                },
+
+                body: JSON.stringify({
+                  phoneNumber,
+                  accessToken
+                })
+              }
+            );
+
+          const result =
+            await response.json();
+
+          if (!response.ok) {
+            throw new Error(
+              result.message ||
+              "Server verification failed"
+            );
+          }
+
+          // ==================================
+          // PHONEMAIL LOGIN SUCCESS
+          // ==================================
+
+          localStorage.setItem(
+            "token",
+            result.token
+          );
+
+          localStorage.setItem(
+            "user",
+            JSON.stringify(result.user)
+          );
+
+          console.log(
+            "Logged in user:",
+            result.user
+          );
+
+          setOtp("");
+
+          setScreen(5);
+
+        } catch (error) {
+          console.error(
+            "PhoneMail OTP verification error:",
+            error
+          );
+
+          setError(
+            error.message ||
+            "Failed to verify OTP"
+          );
+        } finally {
+          setLoading(false);
+        }
+      },
+
+      (error) => {
+        console.error(
+          "MSG91 Verify OTP error:",
+          error
+        );
+
+        setError(
+          error?.message ||
+          "Invalid OTP"
+        );
+
+        setLoading(false);
+      },
+
+      msg91ReqId || undefined
+    );
   };
 
   // --------------------------------------------------

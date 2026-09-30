@@ -725,7 +725,7 @@ button:disabled {
 
 .email-card.unread {
   border-color: #d7cdf8;
-  background: #fcfbff;
+  background: #f0ebfe;
 }
 
 .email-card.unread .email-content strong,
@@ -892,7 +892,7 @@ button:disabled {
   background: transparent;
   color: var(--primary);
   font-size: 14px;
-  font-weight: 500;
+  font-weight: bold;
 }
 
 .back-button:hover {
